@@ -1,7 +1,8 @@
 // app/layout.js
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import "mapbox-gl/dist/mapbox-gl.css"; // Import Mapbox CSS
+import "mapbox-gl/dist/mapbox-gl.css";
+import NavigationContainer from "@/components/features/navigation/NavigationContainer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,7 +14,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Default metadata - can be overridden by pages
 export const metadata = {
   title: "Kabira Mobility",
   description: "Booking Electric Vehicles and Finding Dealers",
@@ -21,26 +21,14 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    // NO WHITESPACE OR COMMENTS BETWEEN <html...> and <head>
     <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Add Material Symbols Font */}
-        {/* Using rel="stylesheet" is standard for CSS */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-          rel="stylesheet"
-        />
-        {/* NO WHITESPACE OR COMMENTS before </head> */}
-      </head>
-      {/* NO WHITESPACE OR COMMENTS BETWEEN </head> and <body...> */}
+      <head>{/* Material Icons link REMOVED */}</head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}
       >
-        {children}
-        {/* NO WHITESPACE OR COMMENTS before </body> */}
+        <NavigationContainer />
+        <div className="flex-grow">{children}</div>
       </body>
-      {/* NO WHITESPACE OR COMMENTS before </html> */}
     </html>
-    // NO WHITESPACE OR COMMENTS after </html>
   );
 }

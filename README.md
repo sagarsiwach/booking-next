@@ -35,10 +35,14 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+
 ```
 km-booking
 ├─ app
 │  ├─ book
+│  │  └─ page.jsx
+│  ├─ dealers
+│  │  ├─ DealerLocatorClient.jsx
 │  │  └─ page.jsx
 │  ├─ favicon.ico
 │  ├─ globals.css
@@ -47,25 +51,41 @@ km-booking
 ├─ bun.lock
 ├─ components
 │  ├─ features
-│  │  └─ booking
-│  │     ├─ BookingContainer.jsx
-│  │     ├─ ColorSelector.jsx
-│  │     ├─ ComponentCard.jsx
-│  │     ├─ LocationSearch.jsx
-│  │     ├─ OTPInputGroup.jsx
-│  │     ├─ PhoneInput.jsx
-│  │     ├─ SectionTitle.jsx
-│  │     ├─ steps
-│  │     │  ├─ FailureState.jsx
-│  │     │  ├─ OTPVerification.jsx
-│  │     │  ├─ PaymentOverlay.jsx
-│  │     │  ├─ SuccessState.jsx
-│  │     │  ├─ UserInformation.jsx
-│  │     │  └─ VehicleConfiguration.jsx
-│  │     ├─ VariantCard.jsx
-│  │     ├─ VehicleCard.jsx
-│  │     └─ VehicleSummary.jsx
+│  │  ├─ booking
+│  │  │  ├─ BookingContainer.jsx
+│  │  │  ├─ ColorSelector.jsx
+│  │  │  ├─ ComponentCard.jsx
+│  │  │  ├─ LocationSearch.jsx
+│  │  │  ├─ OTPInputGroup.jsx
+│  │  │  ├─ PhoneInput.jsx
+│  │  │  ├─ SectionTitle.jsx
+│  │  │  ├─ steps
+│  │  │  │  ├─ FailureState.jsx
+│  │  │  │  ├─ OTPVerification.jsx
+│  │  │  │  ├─ PaymentOverlay.jsx
+│  │  │  │  ├─ SuccessState.jsx
+│  │  │  │  ├─ UserInformation.jsx
+│  │  │  │  └─ VehicleConfiguration.jsx
+│  │  │  ├─ VariantCard.jsx
+│  │  │  ├─ VehicleCard.jsx
+│  │  │  └─ VehicleSummary.jsx
+│  │  ├─ dealers
+│  │  │  ├─ DealerCard.jsx
+│  │  │  ├─ DealerDetailSheet.jsx
+│  │  │  ├─ DealerList.jsx
+│  │  │  ├─ DealerMap.jsx
+│  │  │  ├─ DealerSearch.jsx
+│  │  │  ├─ MapPlaceholder.jsx
+│  │  │  └─ Pagination.jsx
+│  │  └─ navigation
+│  │     ├─ components
+│  │     ├─ DesktopDropdown.jsx
+│  │     ├─ NavBar.jsx
+│  │     ├─ NavigationContainer.jsx
+│  │     └─ NavItem.jsx
 │  └─ ui
+│     ├─ alert.jsx
+│     ├─ badge.jsx
 │     ├─ button.jsx
 │     ├─ card.jsx
 │     ├─ checkbox.jsx
@@ -80,19 +100,27 @@ km-booking
 │     ├─ select.jsx
 │     ├─ separator.jsx
 │     ├─ sheet.jsx
+│     ├─ skeleton.jsx
 │     └─ sonner.jsx
 ├─ components.json
 ├─ context
 │  └─ BookingContext.jsx
 ├─ hooks
 │  ├─ useApiData.js
+│  ├─ useDebounce.js
 │  ├─ useFormValidation.js
+│  ├─ useGeolocation.js
 │  ├─ useLocationSearch.js
 │  └─ useStepNavigation.js
 ├─ jsconfig.json
 ├─ lib
 │  ├─ api.js
+│  ├─ constants.js
+│  ├─ dealer-data.js
 │  ├─ formatting.js
+│  ├─ geo.js
+│  ├─ sanityClient.js
+│  ├─ theme.js
 │  ├─ utils.js
 │  ├─ validation.js
 │  └─ vehicle-data.js
