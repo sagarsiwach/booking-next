@@ -4,159 +4,265 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import * as NavigationMenu from "@radix-ui/react-navigation-menu";
+import PropTypes from "prop-types"; // Import prop-types
 
-// Subcomponent for a single item within the dropdown (either model or link)
-const DropdownItem = React.forwardRef(({ item, className, ...props }, ref) => {
-  const isModel = item.type === "model";
+// Helper component for individual items
+const DropdownItemLink = React.forwardRef(
+  ({ href = "#", children, className, ...props }, ref) => (
+    <Link
+      href={href}
+      ref={ref}
+      className={cn(
+        "block relative text-left", // Base styles
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:ring-neutral-500", // Focus styles
+        className
+      )}
+      prefetch={false}
+      {...props}
+    >
+      {children}
+    </Link>
+  )
+);
+DropdownItemLink.displayName = "DropdownItemLink";
+DropdownItemLink.propTypes = {
+  href: PropTypes.string,
+  children: PropTypes.node,
+  className: PropTypes.string,
+};
 
+// Model Item Display
+const ModelItemDisplay = ({ item }) => {
   return (
-    <NavigationMenu.Link asChild>
-      <Link
-        ref={ref}
-        href={item.url || "#"}
+    <li role="none" className="flex flex-col">
+      {" "}
+      {/* List item for semantics */}
+      <DropdownItemLink
+        href={item.url}
+        role="menuitem"
         className={cn(
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:bg-accent", // Focus style
-          "block select-none space-y-1 p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground", // Base styles from Shadcn example
-          // Custom styles to match layout
-          isModel
-            ? "flex flex-col group rounded-none border-b border-border last:border-b-0 md:border-b-0 md:border md:rounded-lg md:overflow-hidden"
-            : "rounded-md", // Model-specific layout
-          className
+          "group flex flex-col overflow-hidden", // No rounding
+          "hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors duration-150" // Hover background
         )}
-        {...props}
-        prefetch={false}
+        aria-label={item.label}
       >
-        {isModel && item.image && (
-          <div className="w-full aspect-[16/9] relative overflow-hidden bg-muted mb-2">
+        <div className="w-full aspect-[16/9] relative overflow-hidden bg-neutral-100 dark:bg-neutral-800">
+          {item.image ? (
             <Image
               src={item.image}
-              alt={item.label}
-              layout="fill"
-              objectFit="contain"
-              className="p-2"
+              alt="" // Decorative, label is on the link
+              fill // Use fill instead of layout
+              style={{ objectFit: "contain" }} // Use style for objectFit
+              className="p-2" // Padding around image
               loading="lazy"
-              unoptimized={!item.image?.includes("cloudinary")}
+              unoptimized={!item.image?.includes("cloudinary")} // Example condition
             />
-          </div>
-        )}
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-neutral-400 dark:text-neutral-500 italic">
+              Image
+            </div>
+          )}
+        </div>
         <div
           className={cn(
-            "flex items-center justify-between",
-            isModel && "p-3 pt-0 md:p-3" // Adjust padding for model card text
+            "w-full p-4 sm:p-5", // Padding for text area
+            "flex justify-between items-center"
           )}
         >
-          <div
-            className={cn(
-              "text-sm font-medium leading-none",
-              isModel
-                ? "text-base text-foreground group-hover:text-accent-foreground"
-                : "text-muted-foreground group-hover:text-accent-foreground" // Different text styles
-            )}
-          >
+          {/* Adjusted text styles to match Framer */}
+          <span className="text-neutral-700 dark:text-neutral-200 text-xl sm:text-2xl md:text-[30px] font-semibold tracking-[-0.04em] leading-tight">
             {item.label}
-          </div>
-          {isModel ? (
-            <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-accent-foreground transition-colors" />
-          ) : (
-            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/70 group-hover:text-accent-foreground transition-colors" />
-          )}
+          </span>
+          <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 text-neutral-700 dark:text-neutral-300 flex-shrink-0" />
         </div>
-        {/* Optional description for non-model links */}
-        {/* {!isModel && item.description && (
-                    <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
-                        {item.description}
-                    </p>
-                )} */}
-      </Link>
-    </NavigationMenu.Link>
+      </DropdownItemLink>
+    </li>
   );
-});
-DropdownItem.displayName = "DropdownItem";
+};
+ModelItemDisplay.propTypes = {
+  item: PropTypes.shape({
+    label: PropTypes.string.isRequired,
+    url: PropTypes.string,
+    image: PropTypes.string,
+    type: PropTypes.oneOf(["model"]).isRequired,
+  }).isRequired,
+};
 
-// Main content renderer based on type
-export const DesktopDropdownContent = ({ type, items = [] }) => {
-  switch (type) {
-    case "motorbikes":
-    case "scooters":
-      const models = items.filter((item) => item.type === "model");
-      const links = items.filter((item) => item.type === "link");
-
-      if (models.length === 0 && links.length === 0) {
-        return (
-          <div className="p-6 text-center text-sm text-muted-foreground">
-            No items available.
-          </div>
-        );
-      }
-
-      return (
-        // Use ul for semantic list structure
-        // Adjust max-width, padding, etc. as needed
-        <ul className="flex flex-col md:flex-row gap-4 p-4 md:w-[--radix-navigation-menu-viewport-width] max-w-6xl mx-auto">
-          {/* Models Section - Use grid for layout */}
-          <li className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-auto">
-            {models.map((item) => (
-              <DropdownItem key={item.label} item={item} />
-            ))}
-          </li>
-          {/* Links Section - Use flex column */}
-          {links.length > 0 && (
-            <li className="w-full md:w-56 flex-shrink-0 flex flex-col gap-1 md:border-l md:pl-4">
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider px-3 pt-1 pb-2 hidden md:block">
-                Explore
-              </h4>
-              {links.map((item) => (
-                <DropdownItem key={item.label} item={item} />
-              ))}
-            </li>
-          )}
-        </ul>
-      );
-
-    case "more":
-      const moreItems = items.filter((item) => item.type === "link");
-      // Grouping logic from Framer code (if needed, otherwise render flat)
-      const groupedItems = moreItems.reduce((acc, item) => {
-        const groupKey = item.group ?? 0; // Default to group 0 if not specified
-        acc[groupKey] = acc[groupKey] || [];
-        acc[groupKey].push(item);
-        return acc;
-      }, {});
-      const groupKeys = Object.keys(groupedItems).map(Number).sort();
-
-      if (moreItems.length === 0) {
-        return (
-          <div className="p-6 text-center text-sm text-muted-foreground">
-            No items available.
-          </div>
-        );
-      }
-
-      return (
-        // Use grid for 'more' links, allowing columns
-        <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 p-4 md:w-[600px] lg:w-[700px]">
-          {groupKeys.map((groupIndex) => (
-            // Render each group (could add headers later if needed)
-            <React.Fragment key={`more-group-${groupIndex}`}>
-              {groupedItems[groupIndex].map((item) => (
-                <DropdownItem
-                  key={item.label}
-                  item={{ ...item, type: "link" }}
-                /> // Ensure type is link
-              ))}
-            </React.Fragment>
-          ))}
-        </ul>
-      );
-
-    default:
-      return (
-        <div className="p-6 text-center text-sm text-muted-foreground">
-          Invalid dropdown type.
+// Link Item Display
+const LinkItemDisplay = ({ item, labelStyleClasses, iconSize = 20 }) => {
+  // Removed iconName prop
+  return (
+    <li role="none" className="self-stretch">
+      {" "}
+      {/* List item for semantics */}
+      <DropdownItemLink
+        href={item.url}
+        role="menuitem"
+        className={cn(
+          "py-[15px] px-2.5 flex justify-between items-center", // Base padding & layout
+          "hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors duration-150", // Hover state
+          "border-b border-transparent hover:border-neutral-300 dark:hover:border-neutral-600" // Subtle border on hover
+        )}
+        aria-label={item.label}
+      >
+        <span className={cn("tracking-[-0.04em]", labelStyleClasses)}>
+          {item.label}
+        </span>
+        <div className="w-8 h-8 flex items-center justify-center flex-shrink-0 relative">
+          {/* Use Lucide ExternalLink directly */}
+          <ExternalLink
+            className="w-5 h-5 text-neutral-700 dark:text-neutral-300" // Adjusted size
+            strokeWidth={1.5}
+            aria-hidden="true"
+            size={iconSize} // Use the prop for size
+          />
         </div>
-      );
-  }
+      </DropdownItemLink>
+    </li>
+  );
+};
+LinkItemDisplay.propTypes = {
+  item: PropTypes.shape({
+    label: PropTypes.string.isRequired,
+    url: PropTypes.string,
+    type: PropTypes.oneOf(["link"]).isRequired,
+    group: PropTypes.number, // Relevant for 'more' type
+  }).isRequired,
+  labelStyleClasses: PropTypes.string,
+  iconSize: PropTypes.number,
+};
+
+// Main content component
+export const DesktopDropdownContent = ({ type, items = [] }) => {
+  // Specific Styles based on type (adjust Tailwind classes as needed)
+  const secondaryLinkStyles =
+    "text-neutral-500 dark:text-neutral-400 text-2xl font-normal";
+  const moreLinkStyles =
+    "text-neutral-700 dark:text-neutral-200 text-[30px] font-semibold";
+
+  const renderContent = () => {
+    switch (type) {
+      case "motorbikes":
+      case "scooters":
+        const models = items.filter((item) => item.type === "model");
+        const links = items.filter((item) => item.type === "link");
+
+        if (models.length === 0 && links.length === 0) {
+          return (
+            <div className="p-6 text-neutral-500 dark:text-neutral-400 text-center w-full">
+              No items available.
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-col md:flex-row justify-start items-stretch gap-2.5 w-full">
+            {/* Models Section */}
+            <ul
+              role="none"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 flex-auto items-end"
+            >
+              {models.map((item) => (
+                <ModelItemDisplay key={item.label} item={item} />
+              ))}
+            </ul>
+            {/* Links Section */}
+            {links.length > 0 && (
+              <ul
+                role="none"
+                className="w-full md:w-80 flex-shrink-0 flex flex-col justify-end items-start mt-5 md:mt-0 md:pt-[240px] lg:pt-[260px]" /* Adjust top padding */
+              >
+                {links.map((item) => (
+                  <LinkItemDisplay
+                    key={item.label}
+                    item={item}
+                    labelStyleClasses={secondaryLinkStyles}
+                    iconSize={20}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+
+      case "more":
+        const moreLinks = items.filter(
+          (item) => item.type === "link" && typeof item.group === "number"
+        );
+        const groupedItems = moreLinks.reduce((acc, item) => {
+          const groupKey = item.group ?? 0;
+          acc[groupKey] = acc[groupKey] || [];
+          acc[groupKey].push(item);
+          return acc;
+        }, {});
+        const groupKeys = Object.keys(groupedItems).map(Number).sort();
+
+        if (moreLinks.length === 0) {
+          return (
+            <div className="p-6 text-neutral-500 dark:text-neutral-400 text-center w-full">
+              No items available.
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-wrap justify-start items-stretch gap-10 w-full">
+            {groupKeys.map((groupIndex) => (
+              <ul
+                key={`more-group-${groupIndex}`}
+                role="none"
+                className="flex-1 basis-auto max-w-xs min-w-[280px] flex flex-col justify-end items-start"
+              >
+                {groupedItems[groupIndex].map((item) => (
+                  <LinkItemDisplay
+                    key={item.label}
+                    item={item}
+                    labelStyleClasses={moreLinkStyles}
+                    iconSize={24}
+                  />
+                ))}
+              </ul>
+            ))}
+            {/* Placeholder columns for alignment */}
+            {[...Array(Math.max(0, 3 - groupKeys.length))].map((_, i) => (
+              <div
+                key={`placeholder-col-${i}`}
+                className="flex-1 basis-auto max-w-xs min-w-[280px] hidden md:block"
+                aria-hidden="true"
+              ></div>
+            ))}
+          </div>
+        );
+
+      default:
+        return (
+          <div className="p-6 text-neutral-500 dark:text-neutral-400 text-center w-full">
+            Invalid dropdown type.
+          </div>
+        );
+    }
+  };
+
+  // Container for the content with padding
+  return (
+    <div className="max-w-7xl mx-auto w-full pb-10 px-4 lg:px-16">
+      {" "}
+      {/* Match NavBar padding */}
+      {renderContent()}
+    </div>
+  );
+};
+DesktopDropdownContent.propTypes = {
+  type: PropTypes.oneOf(["motorbikes", "scooters", "more"]).isRequired,
+  items: PropTypes.arrayOf(
+    PropTypes.shape({
+      label: PropTypes.string.isRequired,
+      type: PropTypes.oneOf(["model", "link"]).isRequired,
+      url: PropTypes.string,
+      image: PropTypes.string, // Optional for models
+      group: PropTypes.number, // Optional for 'more' links
+    })
+  ),
 };
 
 export default DesktopDropdownContent;

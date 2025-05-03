@@ -1,42 +1,40 @@
 // components/features/navigation/components/NavItem.jsx
-import React from "react";
-import { motion } from "framer-motion";
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+"use client";
 
-// Style generation function (remains the same)
-const generateNavItemClasses = ({
-  isActive = false,
-  isExpanded = false,
-  isHovered = false,
-  isFocusedVisible = false,
-}) => {
-  const base = `
-        flex items-center justify-center relative cursor-pointer
-        font-medium tracking-tight text-sm whitespace-nowrap
-        px-3 py-1.5
-        transition-colors duration-150 ease-out
-        focus:outline-none
-    `;
-  const isEffectivelyActive = isActive || isExpanded;
-  const showInteractiveState =
-    !isEffectivelyActive && (isHovered || isFocusedVisible);
-  const state = cn({
-    "text-foreground": isEffectivelyActive,
-    "text-muted-foreground": !isEffectivelyActive && !showInteractiveState,
-    "text-foreground": showInteractiveState,
-    "bg-accent": showInteractiveState,
-    "bg-transparent": !showInteractiveState,
-  });
-  const focusRing = isFocusedVisible
-    ? "ring-2 ring-ring ring-offset-1 ring-offset-background"
-    : "";
-  return cn(base, state, focusRing);
+import * as React from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import PropTypes from "prop-types"; // Import prop-types
+
+// Mimicking Design Tokens with Tailwind - Adjust these mappings as needed!
+const designTokenMap = {
+  colors: {
+    neutral: {
+      100: "bg-neutral-100 dark:bg-neutral-800", // bg-colorHoverFocus
+      500: "ring-neutral-500", // focusRingColor (used with ring-offset)
+      700: "text-neutral-700 dark:text-neutral-200", // colorDefault
+      900: "text-neutral-900 dark:text-neutral-50", // colorHoverFocus, colorActiveExpanded
+    },
+    white: "bg-white dark:bg-black", // Used for ring offset
+    blue: {
+      500: "ring-blue-500", // Optional focus color
+    },
+  },
+  spacing: {
+    1.5: "py-1.5", // ~6px vertical padding
+    3: "px-3", // ~12px horizontal padding
+  },
+  fontWeight: {
+    medium: "font-medium",
+  },
+  transitionDuration: {
+    150: "duration-150",
+  },
 };
 
-// The component using forwardRef
 export const NavItem = React.forwardRef((props, ref) => {
+  // Remove type annotations from props destructuring
   const {
     id,
     label,
@@ -53,15 +51,28 @@ export const NavItem = React.forwardRef((props, ref) => {
     href = "#",
     role,
     className,
+    // Destructure style props used for mapping
+    fontWeight = designTokenMap.fontWeight.medium,
+    colorDefault = designTokenMap.colors.neutral[700],
+    colorHoverFocus = designTokenMap.colors.neutral[900],
+    colorActiveExpanded = designTokenMap.colors.neutral[900],
+    bgColorHoverFocus = designTokenMap.colors.neutral[100],
+    focusRingColor = designTokenMap.colors.neutral[500],
+    // Destructure unused style props to avoid passing them down if not needed
+    fontFamily, // Usually handled globally
+    fontSize = 16, // Keep for potential mapping logic if needed, but not directly used
     ...restProps
   } = props;
 
-  // State for interaction tracking
   const [isFocusedVisible, setIsFocusedVisible] = React.useState(false);
   const [isHovered, setIsHovered] = React.useState(false);
   const isPointerDown = React.useRef(false);
 
-  // Event Handlers (remain the same)
+  const isEffectivelyActive = isActive || isExpanded;
+  const showInteractiveState =
+    !isEffectivelyActive && (isHovered || isFocusedVisible);
+
+  // --- Event Handlers ---
   const handlePointerDown = React.useCallback(() => {
     isPointerDown.current = true;
   }, []);
@@ -75,7 +86,9 @@ export const NavItem = React.forwardRef((props, ref) => {
     onMouseLeave?.();
   }, [onMouseLeave]);
   const handleFocus = React.useCallback(() => {
-    if (!isPointerDown.current) setIsFocusedVisible(true);
+    if (!isPointerDown.current) {
+      setIsFocusedVisible(true);
+    }
     isPointerDown.current = false;
     onFocus?.();
   }, [onFocus]);
@@ -85,29 +98,43 @@ export const NavItem = React.forwardRef((props, ref) => {
     onBlur?.();
   }, [onBlur]);
 
-  // Generate dynamic classes
-  const combinedClasses = generateNavItemClasses({
-    isActive,
-    isExpanded,
-    isHovered,
-    isFocusedVisible,
-  });
+  // --- Tailwind Class Generation ---
+  const navItemClasses = cn(
+    "relative flex items-center justify-center", // Base layout
+    "cursor-pointer whitespace-nowrap", // Interaction & text handling
+    "px-3 py-1.5", // Padding
+    "text-sm", // Base text size
+    fontWeight, // Apply font weight class
+    "tracking-tight",
+    "transition-colors ease-out",
+    designTokenMap.transitionDuration["150"],
+    "focus:outline-none",
+    "rounded-none",
 
-  // **MODIFICATION START:** Use motion.a and place Link logic inside if needed,
-  // or wrap the content of the Link with motion.span if Link needs to be the outer element.
-  // Let's keep Link as the outer element for routing and wrap content with motion.
-  // We apply motion properties to the Link itself if possible, otherwise wrap the content.
+    // Default State Color
+    !isEffectivelyActive && !showInteractiveState && colorDefault,
 
-  // Since Link passes props down, we can apply motion directly TO the Link component
-  // by using motion(Link) - let's revert to that but ensure it's called correctly.
-  // The previous error might have been unrelated to this pattern itself.
+    // Hover/Focus State
+    showInteractiveState && [colorHoverFocus, bgColorHoverFocus],
 
-  // Re-attempting the cleaner pattern: Create the motion component first
-  const MotionLink = motion(Link);
+    // Active/Expanded State
+    isEffectivelyActive && colorActiveExpanded,
+
+    // Focus Visible Ring
+    isFocusedVisible && [
+      "ring-2 ring-offset-1",
+      focusRingColor,
+      "ring-offset-background",
+    ],
+
+    className
+  );
+
+  const LinkComponent = motion(Link); // Use motion-wrapped Link
 
   return (
-    <MotionLink
-      ref={ref} // Apply ref here
+    <LinkComponent
+      ref={ref}
       id={id}
       href={href}
       role={role}
@@ -121,27 +148,46 @@ export const NavItem = React.forwardRef((props, ref) => {
       onBlur={handleBlur}
       onKeyDown={onKeyDown}
       onPointerDown={handlePointerDown}
-      className={cn(combinedClasses, className)}
+      className={navItemClasses}
       tabIndex={0} // Ensure tabbable
-      transition={{ duration: 0.15, ease: "easeOut" }}
       prefetch={false}
+      transition={{ duration: 0.15, ease: "easeOut" }}
       {...restProps}
     >
-      {/* Content inside the Link */}
       <span>{label}</span>
-      {hasPopup && (
-        <ChevronDown
-          className={cn(
-            "relative top-px ml-1 h-3.5 w-3.5 transition-transform duration-200 ease-out",
-            isExpanded ? "rotate-180" : "rotate-0"
-          )}
-          aria-hidden="true"
-        />
-      )}
-    </MotionLink>
+      {/* Add dropdown indicator if needed */}
+      {/* {hasPopup && <ChevronDown className={...} />} */}
+    </LinkComponent>
   );
-  // **MODIFICATION END**
 });
 
 NavItem.displayName = "NavItem";
-export default NavItem; // Export as default
+
+// Add PropTypes for runtime checking in JavaScript
+NavItem.propTypes = {
+  id: PropTypes.string.isRequired,
+  label: PropTypes.string.isRequired,
+  isActive: PropTypes.bool,
+  hasPopup: PropTypes.bool,
+  isExpanded: PropTypes.bool,
+  controlsId: PropTypes.string,
+  onClick: PropTypes.func,
+  onMouseEnter: PropTypes.func,
+  onMouseLeave: PropTypes.func,
+  onFocus: PropTypes.func,
+  onBlur: PropTypes.func,
+  onKeyDown: PropTypes.func,
+  href: PropTypes.string,
+  role: PropTypes.string,
+  className: PropTypes.string,
+  fontWeight: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  colorDefault: PropTypes.string,
+  colorHoverFocus: PropTypes.string,
+  colorActiveExpanded: PropTypes.string,
+  bgColorHoverFocus: PropTypes.string,
+  focusRingColor: PropTypes.string,
+  fontFamily: PropTypes.string, // Optional prop
+  fontSize: PropTypes.oneOfType([PropTypes.string, PropTypes.number]), // Optional prop
+};
+
+export default NavItem;

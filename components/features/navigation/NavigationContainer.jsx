@@ -1,31 +1,44 @@
 // components/features/navigation/NavigationContainer.jsx
-"use client"; // This component uses hooks and client-side logic
+"use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation"; // To determine active item based on URL
 import { DesktopNavigation } from "./DesktopNavigation";
 import { MobileNavigation } from "./MobileNavigation";
-
-// Import static data - ENSURE THIS PATH IS CORRECT relative to this file
+// Import static data - ENSURE THIS PATH IS CORRECT
 import {
   desktopMenuItems,
   mobileMenuItems,
   motorbikesDropdownItems,
   scootersDropdownItems,
   moreDropdownItems,
-} from "../../../lib/navigation-data.js"
-// Hook for Responsive Check
+} from "../../../lib/navigation-data.js"; // Adjust path as necessary
+import PropTypes from "prop-types"; // Import prop-types
+
+// Hook for Responsive Check (JavaScript version)
 const useMediaQuery = (query) => {
+  // Removed type annotations
   const [matches, setMatches] = useState(false);
 
   useEffect(() => {
-    // Ensure window is defined (runs only on client)
     if (typeof window !== "undefined") {
       const mediaQueryList = window.matchMedia(query);
-      const listener = (event) => setMatches(event.matches);
+      const listener = (event) => setMatches(event.matches); // Removed type annotation
+
       setMatches(mediaQueryList.matches);
-      mediaQueryList.addEventListener("change", listener);
-      return () => mediaQueryList.removeEventListener("change", listener);
+
+      try {
+        mediaQueryList.addEventListener("change", listener);
+      } catch (e) {
+        mediaQueryList.addListener(listener); // Fallback for older browsers
+      }
+
+      return () => {
+        try {
+          mediaQueryList.removeEventListener("change", listener);
+        } catch (e) {
+          mediaQueryList.removeListener(listener); // Fallback for older browsers
+        }
+      };
     }
   }, [query]);
 
@@ -33,29 +46,30 @@ const useMediaQuery = (query) => {
 };
 
 export const NavigationContainer = ({
-  logoColor = "text-neutral-900 dark:text-neutral-100", // Default logo color
+  logoColorClass,
+  logoHoverColorClass,
 }) => {
-  const pathname = usePathname();
-  const isMobile = useMediaQuery("(max-width: 1023px)"); // lg breakpoint
+  // Breakpoint matches Tailwind's lg (1024px)
+  const isMobile = useMediaQuery("(max-width: 1023px)");
+  const [mounted, setMounted] = useState(false);
 
-  const getInitialActiveItem = () => {
-    const matchedItem = [...desktopMenuItems]
-      .sort((a, b) => (b.url?.length || 0) - (a.url?.length || 0))
-      .find(
-        (item) => item.url && item.url !== "#" && pathname?.startsWith(item.url)
-      );
-    return matchedItem?.label || "";
-  };
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  const initialActiveItem = getInitialActiveItem();
+  if (!mounted) {
+    // Render a placeholder matching NavBar height to prevent layout shift
+    return (
+      <div className="h-[81px] w-full bg-background border-b border-border"></div>
+    );
+  }
 
   return (
-    <div className="w-full sticky top-0 left-0 bg-background z-[50]">
-      {" "}
-      {/* Adjusted z-index */}
+    <div className="w-full sticky top-0 left-0 bg-background z-50">
       {isMobile ? (
         <MobileNavigation
-          logoColorClass={logoColor}
+          logoColorClass={logoColorClass}
+          // Pass static data from imports
           mobileMenuItems={mobileMenuItems}
           motorbikesDropdownItems={motorbikesDropdownItems}
           scootersDropdownItems={scootersDropdownItems}
@@ -63,8 +77,9 @@ export const NavigationContainer = ({
         />
       ) : (
         <DesktopNavigation
-          logoColorClass={logoColor}
-          initialActiveItem={initialActiveItem}
+          logoColorClass={logoColorClass}
+          logoHoverColorClass={logoHoverColorClass}
+          // Pass static data from imports
           desktopMenuItems={desktopMenuItems}
           motorbikesDropdownItems={motorbikesDropdownItems}
           scootersDropdownItems={scootersDropdownItems}
@@ -73,6 +88,11 @@ export const NavigationContainer = ({
       )}
     </div>
   );
+};
+
+NavigationContainer.propTypes = {
+  logoColorClass: PropTypes.string,
+  logoHoverColorClass: PropTypes.string,
 };
 
 export default NavigationContainer;

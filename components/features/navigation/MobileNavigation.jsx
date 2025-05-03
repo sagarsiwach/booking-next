@@ -1,54 +1,62 @@
 // components/features/navigation/MobileNavigation.jsx
-"use client"; // This component uses hooks
+"use client";
 
 import React, { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { MenuIcon } from "lucide-react";
-import MobileMenu from "./components/MobileMenu"; // Default import should work now
-import { KMFullLogo } from "./components/NavLogo";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import NavBar from "./components/NavBar";
+import MobileMenu from "./components/MobileMenu";
+import {
+  mobileMenuItems as defaultMobileMenuItems,
+  motorbikesDropdownItems as defaultMotorbikesData,
+  scootersDropdownItems as defaultScootersData,
+  moreDropdownItems as defaultMoreData,
+} from "../../../lib/navigation-data.js";
+import PropTypes from "prop-types"; // Import prop-types
 
 export const MobileNavigation = ({
-  logoColorClass = "text-neutral-900 dark:text-neutral-100",
-  mobileMenuItems = [], // Root items
-  motorbikesDropdownItems = [],
-  scootersDropdownItems = [],
-  moreDropdownItems = [],
-  onNavigate: navigateAction, // Optional override
+  logoColorClass,
+  mobileMenuItems = defaultMobileMenuItems,
+  motorbikesDropdownItems = defaultMotorbikesData,
+  scootersDropdownItems = defaultScootersData,
+  moreDropdownItems = defaultMoreData,
+  ...rest
 }) => {
   const router = useRouter();
-  const onNavigate = navigateAction || router.push;
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState("");
-  const [submenuItems, setSubmenuItems] = useState([]);
-  const [historyStack, setHistoryStack] = useState([]); // [{ label: string, items: MobileNavItemData[] }]
+  // Initialize state with default data passed as props
+  const [currentMenuItems, setCurrentMenuItems] = useState(mobileMenuItems);
+  const [historyStack, setHistoryStack] = useState([]);
 
-  // --- Callbacks ---
+  // Data Transformation (Memoized)
   const getSubmenuItemsForCategory = useCallback(
     (categoryLabel) => {
+      // Removed type annotation
       const categoryLower = categoryLabel.toLowerCase();
       let sourceItems = [];
 
-      // Map labels to the correct data source
-      if (categoryLower === "motorbikes") sourceItems = motorbikesDropdownItems;
-      else if (categoryLower === "scooters")
-        sourceItems = scootersDropdownItems; // Fixed key check
-      else if (categoryLower === "more") {
-        // Map 'more' items structure
-        return (moreDropdownItems || []).map((item) => ({
-          label: item.label,
-          hasChildren: false,
-          icon: "topRight",
-          variant: "mobileChild",
-          url: item.url,
-        }));
-      } else return [];
+      switch (categoryLower) {
+        case "motorbikes":
+          sourceItems = motorbikesDropdownItems;
+          break;
+        case "scooters":
+          sourceItems = scootersDropdownItems;
+          break;
+        case "more":
+          return moreDropdownItems.map((item) => ({
+            label: item.label,
+            hasChildren: false,
+            icon: "topRight",
+            variant: "mobileSubItem",
+            url: item.url,
+          }));
+        default:
+          return [];
+      }
 
-      // Map motorbike/scooter items structure
-      return (sourceItems || []).map((item) => ({
+      // Map motorbike/scooter items
+      return sourceItems.map((item) => ({
         label: item.label,
         hasChildren: false,
         icon: item.type === "model" ? "right" : "topRight",
@@ -57,120 +65,102 @@ export const MobileNavigation = ({
       }));
     },
     [motorbikesDropdownItems, scootersDropdownItems, moreDropdownItems]
-  ); // Dependencies
+  );
 
+  // --- Event Handlers ---
   const handleMenuToggle = useCallback(() => {
-    const closing = mobileMenuOpen;
-    setMobileMenuOpen((prev) => !prev);
-    if (closing) {
-      // Delay reset to allow Sheet animation
+    const isOpening = !mobileMenuOpen;
+    setMobileMenuOpen(isOpening);
+
+    if (!isOpening) {
+      // Reset state *after* close animation
       setTimeout(() => {
         setActiveSubmenu("");
-        setSubmenuItems([]);
-        setHistoryStack([]); // Clear history on close
-      }, 300); // Match Sheet animation duration
+        setCurrentMenuItems(mobileMenuItems);
+        setHistoryStack([]);
+      }, 350); // Adjust based on MobileMenu animation
     }
-  }, [mobileMenuOpen]);
+  }, [mobileMenuOpen, mobileMenuItems]); // Include mobileMenuItems dependency
 
   const handleMobileItemClick = useCallback(
     (item) => {
+      // Removed type annotation
       if (item.back) {
-        // Go back in history
         if (historyStack.length > 0) {
           const previousState = historyStack[historyStack.length - 1];
           setActiveSubmenu(previousState.label);
-          setSubmenuItems(previousState.items);
+          setCurrentMenuItems(previousState.items);
           setHistoryStack((prev) => prev.slice(0, -1));
         } else {
-          // Back to main menu
           setActiveSubmenu("");
-          // No need to set items, derived state will handle it
+          setCurrentMenuItems(mobileMenuItems); // Use prop directly
         }
         return;
       }
 
       if (item.hasChildren) {
-        const newSubmenuItems = getSubmenuItemsForCategory(item.label);
-        // Push current state to history
         setHistoryStack((prev) => [
           ...prev,
-          {
-            label: activeSubmenu,
-            items: activeSubmenu ? submenuItems : mobileMenuItems,
-          },
+          { label: activeSubmenu, items: currentMenuItems },
         ]);
+        const newSubmenuItems = getSubmenuItemsForCategory(item.label);
         setActiveSubmenu(item.label);
-        setSubmenuItems(newSubmenuItems);
+        setCurrentMenuItems(newSubmenuItems);
       } else {
-        handleMenuToggle(); // Close menu (handles state reset after delay)
+        handleMenuToggle(); // Close menu
         if (item.url && item.url !== "#") {
-          onNavigate(item.url);
+          router.push(item.url);
         }
       }
     },
     [
       activeSubmenu,
+      currentMenuItems,
       getSubmenuItemsForCategory,
       handleMenuToggle,
       historyStack,
-      mobileMenuItems,
-      onNavigate,
-      submenuItems,
+      mobileMenuItems, // Use prop directly
+      router,
     ]
   );
 
-  // Derived state for current items
-  const currentMobileNavItems = useMemo(() => {
-    return activeSubmenu ? submenuItems : mobileMenuItems;
-  }, [activeSubmenu, submenuItems, mobileMenuItems]);
-
   return (
-    <div className="w-full relative z-[100] block lg:hidden">
+    <div className="w-full block lg:hidden" {...rest}>
       {" "}
-      {/* Hide on lg screens */}
-      {/* Simplified Nav Bar for Mobile */}
-      <div
-        className={cn(
-          "w-full bg-background border-b border-border",
-          "px-4 py-3", // Mobile padding
-          "flex justify-between items-center"
-        )}
-      >
-        {/* Logo */}
-        <div className="w-[160px] h-[36px] flex-shrink-0">
-          <Link
-            href="/"
-            aria-label="Homepage"
-            className={cn(
-              logoColorClass,
-              "hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-            )}
-          >
-            <KMFullLogo className="block" />
-          </Link>
-        </div>
-        {/* Mobile Menu Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9"
-          onClick={handleMenuToggle}
-          aria-label="Open main menu"
-          aria-expanded={mobileMenuOpen}
-        >
-          <MenuIcon className="h-6 w-6" />
-        </Button>
-      </div>
-      {/* Mobile Menu Component */}
+      {/* Show only on mobile/tablet */}
+      <NavBar
+        isMobile={true}
+        logoColorClass={logoColorClass}
+        onMenuToggle={handleMenuToggle}
+        // Pass empty/dummy props for desktop-specific handlers
+        navItems={[]} // Desktop nav items not needed here
+        onItemHover={() => {}}
+        onItemLeave={() => {}}
+        onItemFocus={() => {}}
+        onItemBlur={() => {}}
+        navItemRefs={{ current: [] }} // Provide dummy ref object
+      />
       <MobileMenu
         isOpen={mobileMenuOpen}
         onClose={handleMenuToggle}
-        navItems={currentMobileNavItems}
+        navItems={currentMenuItems}
         activeSubmenu={activeSubmenu}
         onItemClick={handleMobileItemClick}
+        // Pass animation/style props down if they were received
       />
     </div>
   );
+};
+
+MobileNavigation.propTypes = {
+  logoColorClass: PropTypes.string,
+  mobileMenuItems: PropTypes.array,
+  motorbikesDropdownItems: PropTypes.array,
+  scootersDropdownItems: PropTypes.array,
+  moreDropdownItems: PropTypes.array,
+  // Define animationConfig and styleProps if they are expected props
+  // animationConfig: PropTypes.object,
+  // styleProps: PropTypes.object,
 };
 
 export default MobileNavigation;

@@ -1,113 +1,189 @@
 // components/features/navigation/components/NavBar.jsx
-import React, { useRef } from "react";
+"use client";
+
+import React, { useState, useMemo, useRef } from "react";
 import Link from "next/link";
-import { MenuIcon } from "lucide-react"; // Use Lucide icon
-import NavItem from "./NavItem"; // Import your NavItem
+import { Menu as MenuIcon } from "lucide-react"; // Renamed import
+import { KMFullLogo } from "./NavLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import * as NavigationMenu from "@radix-ui/react-navigation-menu";
+import NavItemContent from "./NavItemContent"; // Renders label + chevron
+import DesktopDropdownContent from "./DesktopDropdownContent"; // Content renderer
+import PropTypes from "prop-types"; // Import prop-types
 
-// Placeholder for Logo component - Replace with your actual logo import
-const KMFullLogo = ({ className }) => (
-  <svg
-    className={cn("w-full h-full", className)}
-    viewBox="0 0 177 40"
-    fill="currentColor"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    {/* Add your actual SVG path data here */}
-    <path d="M10 10 H 167 V 30 H 10 Z" />
-    <text x="20" y="25" fontFamily="Arial" fontSize="16" fill="currentColor">
-      Kabira Mobility
-    </text>
-  </svg>
-);
+// Tailwind class mappings
+const navBarBg = "bg-white dark:bg-neutral-950";
+const navBarBorder = "border-b border-neutral-300 dark:border-neutral-700";
+const logoDefaultColor = "text-neutral-700 dark:text-neutral-200";
+const logoHoverColor = "hover:text-neutral-900 dark:hover:text-neutral-50";
+const mobileButtonColor = "text-neutral-900 dark:text-neutral-100";
+const focusRingClass =
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:ring-blue-500 rounded-sm"; // Example focus ring
 
-// Interfaces for reference
-// export interface DesktopNavItemData { ... }
-// export interface NavBarProps { ... }
+export const NavBar = React.forwardRef((props, ref) => {
+  const {
+    isMobile,
+    logoColorClass = logoDefaultColor,
+    logoHoverColorClass = logoHoverColor,
+    navItems = [],
+    onMenuToggle,
+    // Destructure other props if needed by parent container managing state
+    // activeItemLabel, activeDropdownLabel, onItemHover, onItemLeave, etc.
+    ...rest
+  } = props;
 
-export const NavBar = ({
-  isMobile = false,
-  logoColorClass = "text-neutral-900 dark:text-neutral-100", // Use CSS vars or Tailwind classes
-  navItems = [],
-  activeItemLabel = "", // Currently focused/active item in NavBar itself
-  onMenuToggle, // For mobile
-  // Desktop handlers
-  onItemHover = () => {},
-  onItemLeave = () => {},
-  onItemFocus = () => {},
-  onItemBlur = () => {},
-  onItemClick = () => {},
-  onItemKeyDown = () => {},
-  activeDropdownLabel = "", // Which dropdown is currently expanded
-  getDropdownId = (label) => `dropdown-${label.toLowerCase()}`,
-  navItemRefs, // Refs for desktop keyboard nav
-}) => {
-  const navContainerRef = useRef(null);
+  const [isLogoHovered, setIsLogoHovered] = useState(false);
+
+  const finalLogoColorClass = isLogoHovered
+    ? logoHoverColorClass
+    : logoColorClass;
+
+  // State for Radix NavigationMenu value (controlling open dropdown)
+  const [radixValue, setRadixValue] = useState("");
 
   return (
     <div
+      ref={ref}
       className={cn(
-        "w-full bg-background border-b border-border",
-        "px-4 lg:px-8 py-3", // Adjust padding
-        "flex justify-between items-center relative z-50"
+        "w-full",
+        navBarBg,
+        navBarBorder,
+        "px-4 lg:px-16 py-5",
+        "flex justify-between items-center relative z-50",
+        "antialiased"
       )}
+      {...rest}
     >
       {/* Logo */}
-      <div className={`w-[160px] h-[36px] flex-shrink-0`}>
-        {" "}
-        {/* Slightly smaller logo */}
+      <div className="w-[177px] h-[40px] flex-shrink-0">
         <Link
           href="/"
           aria-label="Homepage"
           className={cn(
-            logoColorClass,
-            "hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+            "block h-full transition-colors duration-150 ease-out",
+            finalLogoColorClass,
+            focusRingClass
           )}
+          onMouseEnter={() => setIsLogoHovered(true)}
+          onMouseLeave={() => setIsLogoHovered(false)}
+          onFocus={() => setIsLogoHovered(true)} // Show hover state on focus too
+          onBlur={() => setIsLogoHovered(false)}
         >
-          <KMFullLogo className="block" />
+          <KMFullLogo className="block w-full h-full" color="currentColor" />
         </Link>
       </div>
 
-      {/* Desktop Navigation */}
+      {/* Desktop Navigation using Radix UI */}
       {!isMobile && (
-        <nav
-          ref={navContainerRef}
-          aria-label="Main Navigation"
-          role="menubar"
-          className="hidden lg:flex justify-center items-center gap-1 relative"
+        <NavigationMenu.Root
+          delayDuration={200}
+          value={radixValue} // Controlled component
+          onValueChange={setRadixValue} // Update state on change
+          className="hidden lg:flex justify-center items-center flex-1"
         >
-          {navItems.map((item, index) => (
-            <NavItem
-              ref={(el) => (navItemRefs.current[index] = el)}
-              key={item.id}
-              id={item.id}
-              label={item.label}
-              isActive={activeItemLabel === item.label} // Active based on direct focus/hover
-              hasPopup={item.hasDropdown}
-              isExpanded={
-                item.hasDropdown &&
-                activeDropdownLabel.toLowerCase() === item.label.toLowerCase()
-              }
-              controlsId={
-                item.hasDropdown ? getDropdownId(item.label) : undefined
-              }
-              onClick={(e) => onItemClick(item, e)}
-              onMouseEnter={() => onItemHover(item.label)} // Pass label
-              onMouseLeave={onItemLeave}
-              onFocus={() => onItemFocus(item.label)} // Pass label
-              onBlur={onItemBlur}
-              onKeyDown={(e) => onItemKeyDown(item, e)}
-              href={item.url}
-              role="menuitem"
+          <NavigationMenu.List className="flex gap-1">
+            {navItems.map((item) => (
+              <NavigationMenu.Item
+                key={item.id}
+                value={item.label.toLowerCase()}
+              >
+                {item.hasDropdown ? (
+                  <>
+                    <NavigationMenu.Trigger
+                      className={cn(
+                        "relative flex items-center justify-center",
+                        "cursor-pointer whitespace-nowrap px-3 py-1.5",
+                        "text-sm font-medium tracking-tight",
+                        "transition-colors ease-out duration-150",
+                        "focus:outline-none rounded-none",
+                        "text-neutral-700 dark:text-neutral-200",
+                        "data-[state=open]:text-neutral-900 data-[state=open]:dark:text-neutral-50",
+                        "hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-50",
+                        "focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:ring-neutral-500",
+                        "group"
+                      )}
+                    >
+                      {/* Pass isExpanded based on controlled Radix state */}
+                      <NavItemContent
+                        label={item.label}
+                        hasPopup={true}
+                        isExpanded={radixValue === item.label.toLowerCase()}
+                      />
+                    </NavigationMenu.Trigger>
+                    <NavigationMenu.Content
+                      // Force remount on open/close for Framer Motion animations inside if needed
+                      // Or handle animations purely with Radix data attributes
+                      forceMount={radixValue === item.label.toLowerCase()}
+                      className={cn(
+                        "absolute top-0 left-0 w-full",
+                        "data-[motion^=from-]:animate-in data-[motion^=to-]:animate-out",
+                        "data-[motion^=from-]:fade-in data-[motion^=to-]:fade-out",
+                        "data-[motion=from-end]:slide-in-from-right-52 data-[motion=from-start]:slide-in-from-left-52",
+                        "data-[motion=to-end]:slide-out-to-right-52 data-[motion=to-start]:slide-out-to-left-52",
+                        "bg-white dark:bg-neutral-950",
+                        "border-b border-neutral-300 dark:border-neutral-700",
+                        "shadow-lg",
+                        "mt-[1px]" // Adjust if needed based on border
+                      )}
+                    >
+                      <DesktopDropdownContent
+                        type={item.dropdownType || "more"}
+                        items={item.dropdownItems || []}
+                      />
+                    </NavigationMenu.Content>
+                  </>
+                ) : (
+                  <NavigationMenu.Link asChild>
+                    <Link
+                      href={item.url || "#"}
+                      className={cn(
+                        "relative flex items-center justify-center",
+                        "cursor-pointer whitespace-nowrap px-3 py-1.5",
+                        "text-sm font-medium tracking-tight",
+                        "transition-colors ease-out duration-150",
+                        "focus:outline-none rounded-none",
+                        "text-neutral-700 dark:text-neutral-200",
+                        "hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-50",
+                        "focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:ring-neutral-500"
+                      )}
+                      prefetch={false}
+                    >
+                      <NavItemContent
+                        label={item.label}
+                        hasPopup={false}
+                        isExpanded={false}
+                      />
+                    </Link>
+                  </NavigationMenu.Link>
+                )}
+              </NavigationMenu.Item>
+            ))}
+          </NavigationMenu.List>
+
+          {/* Radix Viewport Positioner */}
+          <div className="absolute top-full left-0 flex justify-center w-full perspective-[2000px]">
+            <NavigationMenu.Viewport
+              className={cn(
+                "origin-top-center relative mt-[1px]", // Matches content margin
+                "h-[var(--radix-navigation-menu-viewport-height)] w-full", // Let Radix manage width based on content
+                "max-w-[--radix-navigation-menu-viewport-width]", // Optional: constrain max width
+                "overflow-hidden transition-[width,_height] duration-300 ease-in-out",
+                "bg-white dark:bg-neutral-950 rounded-none shadow-lg",
+                "data-[state=open]:animate-in data-[state=closed]:animate-out",
+                "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90"
+              )}
             />
-          ))}
-        </nav>
+          </div>
+        </NavigationMenu.Root>
       )}
 
-      {/* Spacer for Desktop (optional, if logo isn't centered) */}
+      {/* Spacer for Desktop */}
       {!isMobile && (
-        <div className="w-[160px] flex-shrink-0 hidden lg:block"></div>
+        <div
+          className="w-[177px] flex-shrink-0 hidden lg:block"
+          aria-hidden="true"
+        ></div>
       )}
 
       {/* Mobile Menu Toggle */}
@@ -116,10 +192,13 @@ export const NavBar = ({
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9"
+            className={cn(
+              "h-9 w-9 rounded-md",
+              mobileButtonColor,
+              focusRingClass
+            )}
             onClick={onMenuToggle}
             aria-label="Open main menu"
-            aria-expanded={false} // MobileMenu component should manage its own expanded state
           >
             <MenuIcon className="h-6 w-6" />
           </Button>
@@ -127,6 +206,26 @@ export const NavBar = ({
       )}
     </div>
   );
+});
+
+NavBar.displayName = "NavBar";
+
+NavBar.propTypes = {
+  isMobile: PropTypes.bool.isRequired,
+  logoColorClass: PropTypes.string,
+  logoHoverColorClass: PropTypes.string,
+  navItems: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      label: PropTypes.string.isRequired,
+      hasDropdown: PropTypes.bool.isRequired,
+      url: PropTypes.string,
+      dropdownType: PropTypes.string, // Optional based on your data
+      dropdownItems: PropTypes.array, // Optional based on your data
+    })
+  ),
+  onMenuToggle: PropTypes.func, // Required if isMobile can be true
+  // Add proptypes for other interaction handlers if passed from parent
 };
 
 export default NavBar;
