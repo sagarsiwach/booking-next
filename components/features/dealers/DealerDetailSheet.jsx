@@ -6,10 +6,10 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetDescription, // Ensure this is imported
+  SheetDescription, // Make sure it's imported
   SheetFooter,
   SheetClose,
-} from "@/components/ui/sheet";
+} from "@/components/ui/sheet"; // Assuming path is correct
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,10 +37,19 @@ import { cn } from "@/lib/utils";
 
 // --- Motion Variants ---
 const sheetContentVariants = {
-  /* ... (keep as before) ... */
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { delayChildren: 0.15, staggerChildren: 0.06 },
+  },
 };
 const itemVariants = {
-  /* ... (keep as before) ... */
+  hidden: { opacity: 0, y: 8 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
+  },
 };
 
 // --- Helper Components ---
@@ -120,14 +129,24 @@ const DealerDetailSheet = ({
 
   const {
     id,
-    name,
+    name = "Unnamed Dealer",
     address,
     contact,
     hours,
-    services = [],
+    services,
     distance,
     imageUrl,
   } = dealer;
+  const safeServices = Array.isArray(services) ? services : [];
+  const hasSales = safeServices.some(
+    (s) => s && (s.toLowerCase() === "sales" || s.toLowerCase() === "store")
+  );
+  const hasService = safeServices.some(
+    (s) => s && (s.toLowerCase() === "service" || s.toLowerCase() === "repair")
+  );
+  const hasCharging = safeServices.some(
+    (s) => s && s.toLowerCase() === "charging"
+  );
   const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
   const directionsUrl = getDirectionsUrl(dealer);
   const callUrl = contact?.phone
@@ -135,44 +154,42 @@ const DealerDetailSheet = ({
     : undefined;
   const emailUrl = contact?.email ? `mailto:${contact.email}` : undefined;
   const websiteUrl = contact?.website ? formatUrl(contact.website) : undefined;
-  const hasSales = services.some(
-    (s) => s.toLowerCase() === "sales" || s.toLowerCase() === "store"
-  );
-  const hasService = services.some(
-    (s) => s.toLowerCase() === "service" || s.toLowerCase() === "repair"
-  );
-  const hasCharging = services.some((s) => s.toLowerCase() === "charging");
 
-  // Generate unique IDs based on the dealer's ID for ARIA attributes
+  // === Correctly generate IDs for ARIA ===
   const sheetTitleId = `dealer-sheet-title-${id}`;
-  const sheetDescId = `dealer-sheet-desc-${id}`; // ID for the description
+  const sheetDescId = `dealer-sheet-desc-${id}`;
+  // === End ID Generation ===
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      {/* === Apply ARIA attributes DIRECTLY to SheetContent === */}
       <SheetContent
         side={isMobile ? "bottom" : "right"}
         className={cn(
           "w-full flex flex-col p-0",
           isMobile ? "h-[90dvh]" : "sm:max-w-md md:max-w-lg",
-          "data-[state=open]:duration-400 data-[state=closed]:duration-300"
+          "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          isMobile
+            ? "data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom"
+            : "data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
+          "duration-300 ease-in-out"
         )}
-        // === ARIA FIX: Link content to title and description ===
-        aria-labelledby={sheetTitleId}
-        aria-describedby={sheetDescId}
-        // === END ARIA FIX ===
+        aria-labelledby={sheetTitleId} // <--- HERE
+        aria-describedby={sheetDescId} // <--- HERE
       >
+        {/* === End ARIA attribute application === */}
+
         {/* Header */}
         <SheetHeader className="px-4 pt-4 pb-3 border-b sticky top-0 bg-background z-10">
           <div className="flex justify-between items-center gap-3">
-            {/* === ARIA FIX: Add ID to the title === */}
+            {/* Add ID to SheetTitle */}
             <SheetTitle
               id={sheetTitleId}
               className="text-lg font-semibold truncate mr-2"
             >
               {decodeHtmlEntities(name)}
             </SheetTitle>
-            {/* === END ARIA FIX === */}
-            {/* Hidden Description for aria-describedby */}
+            {/* Add ID to SheetDescription */}
             <SheetDescription id={sheetDescId} className="sr-only">
               Details for {decodeHtmlEntities(name)} dealer location.
             </SheetDescription>
@@ -194,14 +211,14 @@ const DealerDetailSheet = ({
           )}
         </SheetHeader>
 
-        {/* Scrollable Content Area with Animation */}
+        {/* Scrollable Content Area */}
         <motion.div
-          className="flex-1 overflow-y-auto px-4 pb-4 pt-3" // Removed space-y-4 here, added within DetailSection
+          className="flex-1 overflow-y-auto px-4 pb-4 pt-3"
           variants={sheetContentVariants}
           initial="hidden"
           animate={isOpen ? "visible" : "hidden"}
         >
-          {/* Content Sections */}
+          {/* ... Sections with DetailSection applying itemVariants ... */}
           {imageUrl && !isMobile && (
             <motion.div
               variants={itemVariants}
@@ -225,17 +242,17 @@ const DealerDetailSheet = ({
               <div className="space-y-2">
                 {callUrl && (
                   <ContactItem icon={PhoneIcon} href={callUrl}>
-                    {contact.phone}
+                    {contact?.phone}
                   </ContactItem>
                 )}
                 {emailUrl && (
                   <ContactItem icon={MailIcon} href={emailUrl}>
-                    {contact.email}
+                    {contact?.email}
                   </ContactItem>
                 )}
                 {websiteUrl && (
                   <ContactItem icon={GlobeIcon} href={websiteUrl}>
-                    {contact.website?.replace(/^https?:\/\//, "")}
+                    {contact?.website?.replace(/^https?:\/\//, "")}
                   </ContactItem>
                 )}
               </div>
@@ -245,34 +262,37 @@ const DealerDetailSheet = ({
             <DetailSection title="Opening Hours">
               <div className="space-y-1 text-sm">
                 {hours.map((hour) => (
-                  <div key={hour.day} className="flex justify-between">
+                  <div
+                    key={hour?._key || hour?.day}
+                    className="flex justify-between"
+                  >
                     <span
                       className={cn(
                         "text-muted-foreground",
-                        hour.day === today && "font-medium text-primary"
+                        hour?.day === today && "font-medium text-primary"
                       )}
                     >
-                      {hour.day}
+                      {hour?.day}
                     </span>
                     <span
                       className={cn(
                         "font-medium",
-                        hour.day === today && "text-primary",
-                        hour.open === "Closed"
+                        hour?.day === today && "text-primary",
+                        hour?.open === "Closed"
                           ? "text-muted-foreground/80"
                           : "text-foreground"
                       )}
                     >
-                      {hour.open === "Closed"
+                      {hour?.open === "Closed"
                         ? "Closed"
-                        : `${hour.open} - ${hour.close}`}
+                        : `${hour?.open} - ${hour?.close}`}
                     </span>
                   </div>
                 ))}
               </div>
             </DetailSection>
           )}
-          {services.length > 0 && (
+          {safeServices.length > 0 && (
             <DetailSection title="Services Available">
               <div className="space-y-1.5">
                 <ServiceItem
@@ -300,7 +320,7 @@ const DealerDetailSheet = ({
 
         {/* Footer Actions */}
         <SheetFooter className="p-3 border-t bg-background sticky bottom-0 z-10">
-          {/* ... Footer content as before ... */}
+          {/* ... Footer content ... */}
           {isMobile ? (
             <div className="grid grid-cols-2 gap-2">
               <SheetClose asChild>
