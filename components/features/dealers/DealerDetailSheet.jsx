@@ -6,10 +6,10 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetDescription, // Make sure it's imported
+  SheetDescription,
   SheetFooter,
   SheetClose,
-} from "@/components/ui/sheet"; // Assuming path is correct
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -52,7 +52,7 @@ const itemVariants = {
   },
 };
 
-// --- Helper Components ---
+// --- Helper Components (Corrected) ---
 const DetailSection = ({ title, children, className, ...rest }) => (
   <motion.section
     variants={itemVariants}
@@ -67,53 +67,61 @@ const DetailSection = ({ title, children, className, ...rest }) => (
     {children}
   </motion.section>
 );
-const ContactItem = ({ icon: Icon, href, children, className }) => (
-  <a
-    href={href || "#"}
-    target={
-      href && !href.startsWith("tel:") && !href.startsWith("mailto:")
-        ? "_blank"
-        : undefined
-    }
-    rel={
-      href && !href.startsWith("tel:") && !href.startsWith("mailto:")
-        ? "noopener noreferrer"
-        : undefined
-    }
-    className={cn(
-      "flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors break-words group",
-      !href && "text-muted-foreground opacity-60 pointer-events-none",
-      className
-    )}
-  >
-    <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 group-hover:text-primary/80 transition-colors" />
-    <span className="leading-snug">{children}</span>
-    {href && !href.startsWith("tel:") && !href.startsWith("mailto:") && (
-      <ExternalLinkIcon className="w-3 h-3 text-muted-foreground/60 ml-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-    )}
-  </a>
-);
+
+const ContactItem = ({ icon: Icon, href, children, className }) => {
+  // Return the JSX directly, removed the dangling attributes outside the tag
+  return (
+    <a // The `<a>` tag should be returned directly
+      href={href || "#"}
+      target={
+        href && !href.startsWith("tel:") && !href.startsWith("mailto:")
+          ? "_blank"
+          : undefined
+      }
+      rel={
+        href && !href.startsWith("tel:") && !href.startsWith("mailto:")
+          ? "noopener noreferrer"
+          : undefined
+      }
+      className={cn(
+        "flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors break-words group",
+        !href && "text-muted-foreground opacity-60 pointer-events-none",
+        className
+      )}
+    >
+      <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 group-hover:text-primary/80 transition-colors" />
+      <span className="leading-snug">{children}</span>
+      {href && !href.startsWith("tel:") && !href.startsWith("mailto:") && (
+        <ExternalLinkIcon className="w-3 h-3 text-muted-foreground/60 ml-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      )}
+    </a>
+  );
+};
+
 const ServiceItem = ({
   icon: Icon,
   label,
   available,
   color = "text-foreground",
-}) => (
-  <div
-    className={cn(
-      "flex items-center gap-2 text-sm",
-      available ? "text-foreground" : "text-muted-foreground/50"
-    )}
-  >
-    <Icon
+}) => {
+  // Return the JSX directly
+  return (
+    <div
       className={cn(
-        "w-3.5 h-3.5 flex-shrink-0",
-        available ? color : "text-muted-foreground/50"
+        "flex items-center gap-2 text-sm",
+        available ? "text-foreground" : "text-muted-foreground/50"
       )}
-    />
-    <span className="leading-snug">{label}</span>
-  </div>
-);
+    >
+      <Icon
+        className={cn(
+          "w-3.5 h-3.5 flex-shrink-0",
+          available ? color : "text-muted-foreground/50"
+        )}
+      />
+      <span className="leading-snug">{label}</span>
+    </div>
+  );
+};
 // --- End Helper Components ---
 
 /** @typedef {import('@/lib/constants').Dealer} Dealer */
@@ -154,15 +162,11 @@ const DealerDetailSheet = ({
     : undefined;
   const emailUrl = contact?.email ? `mailto:${contact.email}` : undefined;
   const websiteUrl = contact?.website ? formatUrl(contact.website) : undefined;
-
-  // === Correctly generate IDs for ARIA ===
   const sheetTitleId = `dealer-sheet-title-${id}`;
   const sheetDescId = `dealer-sheet-desc-${id}`;
-  // === End ID Generation ===
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      {/* === Apply ARIA attributes DIRECTLY to SheetContent === */}
       <SheetContent
         side={isMobile ? "bottom" : "right"}
         className={cn(
@@ -174,22 +178,18 @@ const DealerDetailSheet = ({
             : "data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
           "duration-300 ease-in-out"
         )}
-        aria-labelledby={sheetTitleId} // <--- HERE
-        aria-describedby={sheetDescId} // <--- HERE
+        aria-labelledby={sheetTitleId}
+        aria-describedby={sheetDescId}
       >
-        {/* === End ARIA attribute application === */}
-
         {/* Header */}
         <SheetHeader className="px-4 pt-4 pb-3 border-b sticky top-0 bg-background z-10">
           <div className="flex justify-between items-center gap-3">
-            {/* Add ID to SheetTitle */}
             <SheetTitle
               id={sheetTitleId}
               className="text-lg font-semibold truncate mr-2"
             >
               {decodeHtmlEntities(name)}
             </SheetTitle>
-            {/* Add ID to SheetDescription */}
             <SheetDescription id={sheetDescId} className="sr-only">
               Details for {decodeHtmlEntities(name)} dealer location.
             </SheetDescription>
@@ -218,7 +218,7 @@ const DealerDetailSheet = ({
           initial="hidden"
           animate={isOpen ? "visible" : "hidden"}
         >
-          {/* ... Sections with DetailSection applying itemVariants ... */}
+          {/* Content Sections */}
           {imageUrl && !isMobile && (
             <motion.div
               variants={itemVariants}
@@ -320,7 +320,6 @@ const DealerDetailSheet = ({
 
         {/* Footer Actions */}
         <SheetFooter className="p-3 border-t bg-background sticky bottom-0 z-10">
-          {/* ... Footer content ... */}
           {isMobile ? (
             <div className="grid grid-cols-2 gap-2">
               <SheetClose asChild>
@@ -335,6 +334,7 @@ const DealerDetailSheet = ({
                   </a>
                 </Button>
               ) : (
+                // Corrected Anchor Tag within Button
                 <Button size="sm" asChild className="w-full">
                   <a
                     href={directionsUrl}
@@ -360,17 +360,16 @@ const DealerDetailSheet = ({
                   </a>
                 </Button>
               )}
-              {
-                <Button size="sm" asChild>
-                  <a
-                    href={directionsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <NavigationIcon className="w-4 h-4 mr-1.5" /> Directions
-                  </a>
-                </Button>
-              }
+              {/* Corrected Anchor Tag within Button */}
+              <Button size="sm" asChild>
+                <a
+                  href={directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <NavigationIcon className="w-4 h-4 mr-1.5" /> Directions
+                </a>
+              </Button>
             </div>
           )}
         </SheetFooter>
