@@ -34,3 +34,77 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+```
+km-booking
+├─ app
+│  ├─ book
+│  │  └─ page.jsx
+│  ├─ favicon.ico
+│  ├─ globals.css
+│  ├─ layout.js
+│  └─ page.js
+├─ bun.lock
+├─ components
+│  ├─ features
+│  │  └─ booking
+│  │     ├─ BookingContainer.jsx
+│  │     ├─ ColorSelector.jsx
+│  │     ├─ ComponentCard.jsx
+│  │     ├─ LocationSearch.jsx
+│  │     ├─ OTPInputGroup.jsx
+│  │     ├─ PhoneInput.jsx
+│  │     ├─ SectionTitle.jsx
+│  │     ├─ steps
+│  │     │  ├─ FailureState.jsx
+│  │     │  ├─ OTPVerification.jsx
+│  │     │  ├─ PaymentOverlay.jsx
+│  │     │  ├─ SuccessState.jsx
+│  │     │  ├─ UserInformation.jsx
+│  │     │  └─ VehicleConfiguration.jsx
+│  │     ├─ VariantCard.jsx
+│  │     ├─ VehicleCard.jsx
+│  │     └─ VehicleSummary.jsx
+│  └─ ui
+│     ├─ button.jsx
+│     ├─ card.jsx
+│     ├─ checkbox.jsx
+│     ├─ command.jsx
+│     ├─ dialog.jsx
+│     ├─ input-otp.jsx
+│     ├─ input.jsx
+│     ├─ label.jsx
+│     ├─ navigation-menu.jsx
+│     ├─ popover.jsx
+│     ├─ radio-group.jsx
+│     ├─ select.jsx
+│     ├─ separator.jsx
+│     ├─ sheet.jsx
+│     └─ sonner.jsx
+├─ components.json
+├─ context
+│  └─ BookingContext.jsx
+├─ hooks
+│  ├─ useApiData.js
+│  ├─ useFormValidation.js
+│  ├─ useLocationSearch.js
+│  └─ useStepNavigation.js
+├─ jsconfig.json
+├─ lib
+│  ├─ api.js
+│  ├─ formatting.js
+│  ├─ utils.js
+│  ├─ validation.js
+│  └─ vehicle-data.js
+├─ next.config.mjs
+├─ package.json
+├─ postcss.config.mjs
+├─ public
+│  ├─ file.svg
+│  ├─ globe.svg
+│  ├─ next.svg
+│  ├─ vercel.svg
+│  └─ window.svg
+└─ README.md
+
+```
