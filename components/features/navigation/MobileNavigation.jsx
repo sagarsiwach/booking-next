@@ -1,38 +1,30 @@
 // components/features/navigation/MobileNavigation.jsx
 "use client";
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import NavBar from "./components/NavBar";
 import MobileMenu from "./components/MobileMenu";
-import {
-  mobileMenuItems as defaultMobileMenuItems,
-  motorbikesDropdownItems as defaultMotorbikesData,
-  scootersDropdownItems as defaultScootersData,
-  moreDropdownItems as defaultMoreData,
-} from "../../../lib/navigation-data.js";
-import PropTypes from "prop-types"; // Import prop-types
 
 export const MobileNavigation = ({
   logoColorClass,
-  mobileMenuItems = defaultMobileMenuItems,
-  motorbikesDropdownItems = defaultMotorbikesData,
-  scootersDropdownItems = defaultScootersData,
-  moreDropdownItems = defaultMoreData,
-  ...rest
+  logoHoverColorClass,
+  mobileMenuItems = [],
+  motorbikesDropdownItems = [],
+  scootersDropdownItems = [],
+  moreDropdownItems = [],
 }) => {
   const router = useRouter();
 
+  // State
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState("");
-  // Initialize state with default data passed as props
   const [currentMenuItems, setCurrentMenuItems] = useState(mobileMenuItems);
   const [historyStack, setHistoryStack] = useState([]);
 
-  // Data Transformation (Memoized)
+  // Submenu generation
   const getSubmenuItemsForCategory = useCallback(
     (categoryLabel) => {
-      // Removed type annotation
       const categoryLower = categoryLabel.toLowerCase();
       let sourceItems = [];
 
@@ -55,7 +47,7 @@ export const MobileNavigation = ({
           return [];
       }
 
-      // Map motorbike/scooter items
+      // Map model/type items
       return sourceItems.map((item) => ({
         label: item.label,
         hasChildren: false,
@@ -67,24 +59,23 @@ export const MobileNavigation = ({
     [motorbikesDropdownItems, scootersDropdownItems, moreDropdownItems]
   );
 
-  // --- Event Handlers ---
+  // Event handlers
   const handleMenuToggle = useCallback(() => {
     const isOpening = !mobileMenuOpen;
     setMobileMenuOpen(isOpening);
 
     if (!isOpening) {
-      // Reset state *after* close animation
+      // Reset state after close animation finishes
       setTimeout(() => {
         setActiveSubmenu("");
         setCurrentMenuItems(mobileMenuItems);
         setHistoryStack([]);
-      }, 350); // Adjust based on MobileMenu animation
+      }, 350);
     }
-  }, [mobileMenuOpen, mobileMenuItems]); // Include mobileMenuItems dependency
+  }, [mobileMenuOpen, mobileMenuItems]);
 
   const handleMobileItemClick = useCallback(
     (item) => {
-      // Removed type annotation
       if (item.back) {
         if (historyStack.length > 0) {
           const previousState = historyStack[historyStack.length - 1];
@@ -93,21 +84,25 @@ export const MobileNavigation = ({
           setHistoryStack((prev) => prev.slice(0, -1));
         } else {
           setActiveSubmenu("");
-          setCurrentMenuItems(mobileMenuItems); // Use prop directly
+          setCurrentMenuItems(mobileMenuItems);
         }
         return;
       }
 
       if (item.hasChildren) {
+        // Push current state to history stack
         setHistoryStack((prev) => [
           ...prev,
           { label: activeSubmenu, items: currentMenuItems },
         ]);
+
+        // Set new submenu
         const newSubmenuItems = getSubmenuItemsForCategory(item.label);
         setActiveSubmenu(item.label);
         setCurrentMenuItems(newSubmenuItems);
       } else {
-        handleMenuToggle(); // Close menu
+        // Navigate to URL
+        handleMenuToggle();
         if (item.url && item.url !== "#") {
           router.push(item.url);
         }
@@ -119,48 +114,30 @@ export const MobileNavigation = ({
       getSubmenuItemsForCategory,
       handleMenuToggle,
       historyStack,
-      mobileMenuItems, // Use prop directly
+      mobileMenuItems,
       router,
     ]
   );
 
   return (
-    <div className="w-full block lg:hidden" {...rest}>
-      {" "}
-      {/* Show only on mobile/tablet */}
+    <div className="w-full block lg:hidden">
       <NavBar
         isMobile={true}
         logoColorClass={logoColorClass}
+        logoHoverColorClass={logoHoverColorClass}
         onMenuToggle={handleMenuToggle}
-        // Pass empty/dummy props for desktop-specific handlers
-        navItems={[]} // Desktop nav items not needed here
-        onItemHover={() => {}}
-        onItemLeave={() => {}}
-        onItemFocus={() => {}}
-        onItemBlur={() => {}}
-        navItemRefs={{ current: [] }} // Provide dummy ref object
+        navItems={[]} // Not needed for mobile
       />
+
       <MobileMenu
         isOpen={mobileMenuOpen}
         onClose={handleMenuToggle}
         navItems={currentMenuItems}
         activeSubmenu={activeSubmenu}
         onItemClick={handleMobileItemClick}
-        // Pass animation/style props down if they were received
       />
     </div>
   );
-};
-
-MobileNavigation.propTypes = {
-  logoColorClass: PropTypes.string,
-  mobileMenuItems: PropTypes.array,
-  motorbikesDropdownItems: PropTypes.array,
-  scootersDropdownItems: PropTypes.array,
-  moreDropdownItems: PropTypes.array,
-  // Define animationConfig and styleProps if they are expected props
-  // animationConfig: PropTypes.object,
-  // styleProps: PropTypes.object,
 };
 
 export default MobileNavigation;

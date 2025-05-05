@@ -1,118 +1,60 @@
 // components/features/navigation/DesktopNavigation.jsx
 "use client";
 
-import React, {
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useMemo,
-} from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion"; // Import motion here
+import { AnimatePresence } from "framer-motion";
 import NavBar from "./components/NavBar";
 import DesktopDropdown from "./components/DesktopDropdown";
-import {
-  desktopMenuItems as defaultDesktopMenuItems,
-  motorbikesDropdownItems as defaultMotorbikesData,
-  scootersDropdownItems as defaultScootersData,
-  moreDropdownItems as defaultMoreData,
-} from "../../../lib/navigation-data.js"; // Adjust path if necessary
-import PropTypes from "prop-types"; // Import prop-types
-import { cn } from "@/lib/utils"; // Assuming cn is needed in DesktopDropdown or NavBar
+import { cn } from "@/lib/utils";
 
-// --- REMOVED TypeScript Interfaces ---
-// interface DesktopNavItemData { ... }
-// interface AnyDropdownItem { ... }
-// interface DesktopNavigationProps { ... }
-
-// Helper functions (remain the same)
-const focusFirstItem = (element /* Removed type annotation */) => {
+// Focus management helper
+const focusFirstItem = (element) => {
   if (!element) return;
   const firstFocusable = element.querySelector(
     'a[role="menuitem"]:not([disabled])'
   );
   firstFocusable?.focus();
 };
-const focusElementById = (elementId /* Removed type annotation */) => {
-  if (!elementId) return;
-  requestAnimationFrame(() => {
-    document.getElementById(elementId)?.focus();
-  });
-};
 
 export const DesktopNavigation = ({
   logoColorClass,
   logoHoverColorClass,
-  initialActiveItem = "",
-  desktopMenuItems = defaultDesktopMenuItems,
-  motorbikesDropdownItems = defaultMotorbikesData,
-  scootersDropdownItems = defaultScootersData,
-  moreDropdownItems = defaultMoreData,
-  // Add default values or ensure they are passed if needed for animation/styling
-  // animationConfig,
-  // styleProps,
+  desktopMenuItems = [],
+  motorbikesDropdownItems = [],
+  scootersDropdownItems = [],
+  moreDropdownItems = [],
 }) => {
   const router = useRouter();
 
-  // --- State ---
+  // State
   const [activeDropdown, setActiveDropdown] = useState("");
   const [isHoveringNavItem, setIsHoveringNavItem] = useState(false);
   const [isHoveringDropdown, setIsHoveringDropdown] = useState(false);
+
+  // Refs
   const mouseLeaveTimeoutRef = useRef(null);
   const navRef = useRef(null);
   const itemRefs = useRef([]);
 
-  // --- ID Generation ---
+  // ID generation
   const generateId = useCallback(
-    (
-      prefix,
-      label // Removed type annotations
-    ) => `${prefix}-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    (prefix, label) =>
+      `${prefix}-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
     []
   );
+
   const getNavItemId = useCallback(
     (label) => generateId("nav-item", label),
     [generateId]
   );
+
   const getDropdownId = useCallback(
     (label) => generateId("dropdown", label),
     [generateId]
   );
 
-  // Process items to ensure IDs and attach dropdown data
-  const processedDesktopItems = useMemo(
-    () =>
-      desktopMenuItems.map((item, index) => ({
-        ...item,
-        id: item.id || getNavItemId(item.label) || `nav-fallback-${index}`,
-        // Map dropdown type based on label
-        dropdownType: item.label.toLowerCase().includes("bike")
-          ? "motorbikes"
-          : item.label.toLowerCase().includes("scooter")
-          ? "scooters"
-          : item.label.toLowerCase() === "more"
-          ? "more"
-          : undefined,
-        // Attach the corresponding items directly
-        dropdownItems: item.label.toLowerCase().includes("bike")
-          ? motorbikesDropdownItems
-          : item.label.toLowerCase().includes("scooter")
-          ? scootersDropdownItems
-          : item.label.toLowerCase() === "more"
-          ? moreDropdownItems
-          : [],
-      })),
-    [
-      desktopMenuItems,
-      getNavItemId,
-      motorbikesDropdownItems,
-      scootersDropdownItems,
-      moreDropdownItems,
-    ]
-  );
-
-  // --- Timer Logic ---
+  // Timer management
   const clearCloseTimer = useCallback(() => {
     if (mouseLeaveTimeoutRef.current)
       clearTimeout(mouseLeaveTimeoutRef.current);
@@ -124,57 +66,25 @@ export const DesktopNavigation = ({
       if (!isHoveringNavItem && !isHoveringDropdown) {
         setActiveDropdown("");
       }
-    }, 200); // Adjust delay
+    }, 200);
   }, [isHoveringNavItem, isHoveringDropdown, clearCloseTimer]);
 
-  // --- Hover/Focus Handlers ---
+  // Event handlers
   const handleItemHover = useCallback(
     (item) => {
-      // Removed type annotation
       setIsHoveringNavItem(true);
       clearCloseTimer();
-      const key = item.hasDropdown ? item.label.toLowerCase() : "";
-      if (key !== activeDropdown) {
-        setActiveDropdown(key);
+      if (item.hasDropdown) {
+        setActiveDropdown(item.label.toLowerCase());
       }
     },
-    [clearCloseTimer, activeDropdown]
+    [clearCloseTimer]
   );
 
   const handleItemLeave = useCallback(() => {
     setIsHoveringNavItem(false);
     startCloseTimer();
   }, [startCloseTimer]);
-
-  const handleItemFocus = useCallback(
-    (item) => {
-      // Removed type annotation
-      setIsHoveringNavItem(true);
-      clearCloseTimer();
-      const key = item.hasDropdown ? item.label.toLowerCase() : "";
-      if (activeDropdown && activeDropdown !== key) {
-        setActiveDropdown("");
-      }
-    },
-    [clearCloseTimer, activeDropdown]
-  );
-
-  const handleItemBlur = useCallback(() => {
-    setTimeout(() => {
-      const focusedElement = document.activeElement;
-      if (
-        navRef.current &&
-        focusedElement &&
-        !navRef.current.contains(focusedElement)
-      ) {
-        setIsHoveringNavItem(false);
-        setIsHoveringDropdown(false);
-        startCloseTimer();
-      } else {
-        setIsHoveringNavItem(false);
-      }
-    }, 0);
-  }, [startCloseTimer, activeDropdown]);
 
   const handleDropdownEnter = useCallback(() => {
     setIsHoveringDropdown(true);
@@ -186,84 +96,71 @@ export const DesktopNavigation = ({
     startCloseTimer();
   }, [startCloseTimer]);
 
-  // --- Close & Click Handlers ---
   const closeDropdown = useCallback(
     (returnFocusToLabel) => {
-      // Removed type annotation
-      const currentOpenLabel = activeDropdown;
-      if (!currentOpenLabel) return;
+      const currentDropdown = activeDropdown;
+      if (!currentDropdown) return;
+
       setActiveDropdown("");
 
-      const triggerLabel = returnFocusToLabel || currentOpenLabel;
-      const trigger = processedDesktopItems.find(
-        (i) => i.label.toLowerCase() === triggerLabel.toLowerCase()
-      );
-      if (trigger?.id) {
-        setTimeout(() => focusElementById(trigger.id), 300);
+      if (returnFocusToLabel) {
+        const triggerItem = desktopMenuItems.find(
+          (item) =>
+            item.label.toLowerCase() === returnFocusToLabel.toLowerCase()
+        );
+
+        if (triggerItem?.id) {
+          setTimeout(
+            () => document.getElementById(triggerItem.id)?.focus(),
+            50
+          );
+        }
       }
     },
-    [activeDropdown, processedDesktopItems]
+    [activeDropdown, desktopMenuItems]
   );
 
   const handleDesktopItemClick = useCallback(
     (item, event) => {
-      // Removed type annotations
       const labelLower = item.label.toLowerCase();
+
       if (!item.hasDropdown) {
         closeDropdown();
         if (item.url && item.url !== "#") {
-          // Allow Link component to navigate
-          // router.push(item.url); // Alternative if not using Link directly
-        } else {
-          event.preventDefault();
+          router.push(item.url);
         }
       } else {
         event.preventDefault();
         const isCurrentlyOpen = activeDropdown === labelLower;
-        const nextActiveDropdown = isCurrentlyOpen ? "" : labelLower;
-        setActiveDropdown(nextActiveDropdown);
+        setActiveDropdown(isCurrentlyOpen ? "" : labelLower);
         clearCloseTimer();
 
-        if (nextActiveDropdown) {
-          setTimeout(
-            () =>
-              focusFirstItem(
-                document.getElementById(getDropdownId(item.label))
-              ),
-            50
-          );
-        } else {
-          focusElementById(item.id);
+        if (!isCurrentlyOpen) {
+          // Focus first item inside dropdown after opening
+          setTimeout(() => {
+            focusFirstItem(document.getElementById(getDropdownId(item.label)));
+          }, 50);
         }
       }
     },
-    [activeDropdown, closeDropdown, clearCloseTimer, getDropdownId]
-  ); // Added getDropdownId
+    [activeDropdown, closeDropdown, clearCloseTimer, getDropdownId, router]
+  );
 
-  // Click *inside* the dropdown
   const handleDropdownItemClick = useCallback(
     (item) => {
-      // Removed type annotation
       closeDropdown(activeDropdown);
       if (item.url && item.url !== "#") {
-        // Use router push for navigation after closing
-        // Delay slightly to allow close animation if needed
-        setTimeout(() => router.push(item.url), 50);
+        setTimeout(() => router.push(item.url), 100);
       }
     },
     [activeDropdown, closeDropdown, router]
   );
 
-  // --- Keyboard Navigation ---
+  // Keyboard navigation
   const handleItemKeyDown = useCallback(
     (item, event) => {
-      // Removed type annotations
       const lowerLabel = item.label.toLowerCase();
-      const currentIndex = processedDesktopItems.findIndex(
-        (i) => i.id === item.id
-      );
-      let nextFocusTarget = null;
-      let closeCurrentDropdown = false;
+      const currentIndex = desktopMenuItems.findIndex((i) => i.id === item.id);
 
       switch (event.key) {
         case "Enter":
@@ -274,76 +171,42 @@ export const DesktopNavigation = ({
         case "ArrowDown":
           if (item.hasDropdown) {
             event.preventDefault();
-            if (activeDropdown !== lowerLabel) {
-              setActiveDropdown(lowerLabel);
-              clearCloseTimer();
-              setTimeout(
-                () =>
-                  focusFirstItem(
-                    document.getElementById(getDropdownId(item.label))
-                  ),
-                50
-              );
-            } else {
+            setActiveDropdown(lowerLabel);
+            clearCloseTimer();
+            setTimeout(() => {
               focusFirstItem(
                 document.getElementById(getDropdownId(item.label))
               );
-            }
-          }
-          break;
-        case "ArrowUp":
-          if (item.hasDropdown && activeDropdown === lowerLabel) {
-            event.preventDefault();
-            closeDropdown(item.label);
+            }, 50);
           }
           break;
         case "ArrowLeft":
           event.preventDefault();
           const prevIndex =
-            (currentIndex - 1 + processedDesktopItems.length) %
-            processedDesktopItems.length;
-          nextFocusTarget = itemRefs.current[prevIndex];
-          closeCurrentDropdown = true;
+            (currentIndex - 1 + desktopMenuItems.length) %
+            desktopMenuItems.length;
+          itemRefs.current[prevIndex]?.focus();
+          if (activeDropdown) setActiveDropdown("");
           break;
         case "ArrowRight":
           event.preventDefault();
-          const nextIndex = (currentIndex + 1) % processedDesktopItems.length;
-          nextFocusTarget = itemRefs.current[nextIndex];
-          closeCurrentDropdown = true;
+          const nextIndex = (currentIndex + 1) % desktopMenuItems.length;
+          itemRefs.current[nextIndex]?.focus();
+          if (activeDropdown) setActiveDropdown("");
           break;
         case "Escape":
           if (activeDropdown) {
             event.preventDefault();
-            closeDropdown(activeDropdown);
+            closeDropdown(item.label);
           }
           break;
-        case "Tab":
-          setTimeout(() => {
-            const focusedElement = document.activeElement;
-            if (
-              activeDropdown &&
-              navRef.current &&
-              focusedElement &&
-              !navRef.current.contains(focusedElement)
-            ) {
-              closeDropdown();
-            }
-          }, 0);
-          break;
-      }
-
-      if (closeCurrentDropdown && activeDropdown) {
-        setActiveDropdown(""); // Close dropdown when moving between items
-      }
-      if (nextFocusTarget) {
-        setTimeout(() => nextFocusTarget?.focus(), 0);
       }
     },
     [
       activeDropdown,
       clearCloseTimer,
       closeDropdown,
-      processedDesktopItems,
+      desktopMenuItems,
       getDropdownId,
       handleDesktopItemClick,
     ]
@@ -351,21 +214,18 @@ export const DesktopNavigation = ({
 
   const handleDropdownKeyDown = useCallback(
     (event) => {
-      // Removed type annotation
       if (!activeDropdown) return;
-      const dropdownElement = event.currentTarget; // Removed type assertion
+
+      const dropdownElement = event.currentTarget;
       const focusableItems = Array.from(
-        dropdownElement.querySelectorAll(
-          // Removed type assertion
-          'a[role="menuitem"]:not([disabled])'
-        )
+        dropdownElement.querySelectorAll('a[role="menuitem"]:not([disabled])')
       );
+
       if (focusableItems.length === 0) return;
 
       const currentFocusedIndex = focusableItems.findIndex(
         (el) => el === document.activeElement
       );
-      let nextFocusTarget = null;
 
       switch (event.key) {
         case "ArrowDown":
@@ -375,15 +235,7 @@ export const DesktopNavigation = ({
           let nextIndex = currentFocusedIndex + direction;
           if (nextIndex < 0) nextIndex = focusableItems.length - 1;
           if (nextIndex >= focusableItems.length) nextIndex = 0;
-          nextFocusTarget = focusableItems[nextIndex];
-          break;
-        case "Home":
-          event.preventDefault();
-          nextFocusTarget = focusableItems[0];
-          break;
-        case "End":
-          event.preventDefault();
-          nextFocusTarget = focusableItems[focusableItems.length - 1];
+          focusableItems[nextIndex].focus();
           break;
         case "Escape":
         case "Tab":
@@ -391,18 +243,13 @@ export const DesktopNavigation = ({
           closeDropdown(activeDropdown);
           break;
       }
-      if (nextFocusTarget) {
-        setTimeout(() => nextFocusTarget?.focus(), 0);
-      }
     },
     [activeDropdown, closeDropdown]
   );
 
-  // --- Effects ---
+  // Click outside effect
   useEffect(() => {
-    // Click outside handler
     const handleClickOutside = (event) => {
-      // Removed type annotation
       if (
         activeDropdown &&
         navRef.current &&
@@ -411,20 +258,35 @@ export const DesktopNavigation = ({
         setActiveDropdown("");
       }
     };
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [activeDropdown]);
 
+  // Clean up timer on unmount
   useEffect(() => {
-    // Cleanup timer on unmount
-    return () => clearTimeout(mouseLeaveTimeoutRef.current ?? undefined);
+    return () => clearTimeout(mouseLeaveTimeoutRef.current);
   }, []);
 
-  // --- Render ---
-  const navBarHeight = navRef.current?.offsetHeight || 81; // Estimate or measure
+  // Dropdown mapping
+  const dropdownMap = {
+    motorbikes: { type: "motorbikes", items: motorbikesDropdownItems },
+    scooter: { type: "scooters", items: scootersDropdownItems },
+    more: { type: "more", items: moreDropdownItems },
+  };
+
+  // Process menu items to ensure IDs
+  const processedItems = desktopMenuItems.map((item, index) => ({
+    ...item,
+    id: item.id || getNavItemId(item.label) || `nav-item-${index}`,
+  }));
+
+  // Find the active item for the active dropdown
+  const activeItem = activeDropdown
+    ? processedItems.find((item) => item.label.toLowerCase() === activeDropdown)
+    : null;
 
   return (
-    // Container with ref and leave handler
     <div
       ref={navRef}
       className="w-full relative z-50 hidden lg:block"
@@ -434,75 +296,35 @@ export const DesktopNavigation = ({
         isMobile={false}
         logoColorClass={logoColorClass}
         logoHoverColorClass={logoHoverColorClass}
-        navItems={processedDesktopItems}
-        activeItemLabel={activeDropdown} // Pass active dropdown label for potential NavItem styling
-        activeDropdownLabel={activeDropdown} // Pass for NavItem's aria-expanded
+        navItems={processedItems}
+        activeDropdownLabel={activeDropdown}
         getDropdownId={getDropdownId}
         onItemHover={handleItemHover}
-        onItemLeave={() => {
-          /* Leave handled by container */
-        }}
-        onItemFocus={handleItemFocus}
-        onItemBlur={handleItemBlur}
+        onItemLeave={handleItemLeave}
         onItemClick={handleDesktopItemClick}
         onItemKeyDown={handleItemKeyDown}
         navItemRefs={itemRefs}
-        // Pass down style props if NavItem uses them
       />
 
-      {/* Dropdown Container */}
-      <div
-        className="absolute top-full left-0 right-0 z-40"
-        style={{ top: `${navBarHeight}px` }} // Position below navbar
-      >
-        <AnimatePresence mode="wait">
-          {activeDropdown &&
-            processedDesktopItems.find(
-              (i) => i.label.toLowerCase() === activeDropdown
-            )?.hasDropdown && (
-              <DesktopDropdown
-                key={activeDropdown}
-                id={getDropdownId(activeDropdown)}
-                triggerId={
-                  processedDesktopItems.find(
-                    (i) => i.label.toLowerCase() === activeDropdown
-                  )?.id || ""
-                }
-                // isOpen prop managed by AnimatePresence
-                type={
-                  processedDesktopItems.find(
-                    (i) => i.label.toLowerCase() === activeDropdown
-                  )?.dropdownType
-                }
-                items={
-                  processedDesktopItems.find(
-                    (i) => i.label.toLowerCase() === activeDropdown
-                  )?.dropdownItems || []
-                }
-                onItemClick={handleDropdownItemClick} // Make sure DesktopDropdown passes this down
-                onMouseEnter={handleDropdownEnter}
-                onMouseLeave={handleDropdownLeave}
-                onKeyDown={handleDropdownKeyDown}
-                // animationConfig={...} // Pass if needed
-                // styleProps={...} // Pass if needed
-              />
-            )}
-        </AnimatePresence>
-      </div>
+      <AnimatePresence>
+        {activeDropdown &&
+          activeItem?.hasDropdown &&
+          dropdownMap[activeDropdown] && (
+            <DesktopDropdown
+              key={activeDropdown}
+              id={getDropdownId(activeDropdown)}
+              triggerId={activeItem.id}
+              type={dropdownMap[activeDropdown].type}
+              items={dropdownMap[activeDropdown].items}
+              onItemClick={handleDropdownItemClick}
+              onMouseEnter={handleDropdownEnter}
+              onMouseLeave={handleDropdownLeave}
+              onKeyDown={handleDropdownKeyDown}
+            />
+          )}
+      </AnimatePresence>
     </div>
   );
-};
-
-DesktopNavigation.propTypes = {
-  logoColorClass: PropTypes.string,
-  logoHoverColorClass: PropTypes.string,
-  initialActiveItem: PropTypes.string,
-  desktopMenuItems: PropTypes.array,
-  motorbikesDropdownItems: PropTypes.array,
-  scootersDropdownItems: PropTypes.array,
-  moreDropdownItems: PropTypes.array,
-  // animationConfig: PropTypes.object, // Define shape if needed
-  // styleProps: PropTypes.object, // Define shape if needed
 };
 
 export default DesktopNavigation;

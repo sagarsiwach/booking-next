@@ -1,72 +1,17 @@
-// components/features/navigation/components/MobileMenu.jsx
+// booking-next/components/features/navigation/components/MobileMenu.jsx
 "use client";
 
-import React, { useEffect, useRef, useMemo, useCallback } from "react"; // Added useCallback
+import React, { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+// Import Carbon icons
 import {
   ChevronRight,
-  ExternalLink,
-  MoreHorizontal,
-  X,
+  ArrowUpRight, // For external links
+  OverflowMenuHorizontal, // For 'More' (ellipsis)
+  Close, // For 'X'
   ArrowLeft,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+} from "@carbon/icons-react";
 import { cn } from "@/lib/utils";
-import PropTypes from "prop-types"; // Import prop-types
-
-// Mimicking Design Tokens with Tailwind
-const mobileDesignTokenMap = {
-  colors: {
-    neutral: {
-      50: "hover:bg-neutral-50 dark:hover:bg-neutral-800",
-      200: "bg-neutral-200 dark:bg-neutral-900",
-      300: "border-neutral-300 dark:border-neutral-700",
-      400: "border-neutral-400 dark:border-neutral-600",
-      500: "text-neutral-500 dark:text-neutral-400 ring-neutral-500", // Added ring color class
-      700: "text-neutral-700 dark:text-neutral-200",
-      900: "text-neutral-900 dark:text-neutral-100",
-    },
-    white: "bg-white dark:bg-black",
-  },
-  spacing: {
-    2.5: "px-2.5",
-    4: "mt-4",
-    5: "p-5",
-    6: "pt-6",
-    8: "size-8",
-    24: "pb-24",
-  },
-  fontWeight: {
-    regular: "font-normal", // 400
-    semibold: "font-semibold", // 600
-  },
-  boxShadow: {
-    lg: "shadow-lg",
-  },
-  zIndex: {
-    110: "z-[110]",
-    120: "z-[120]",
-    130: "z-[130]",
-  },
-};
-
-// Default Animation Config
-const defaultMobileAnimationConfig = {
-  drawerDuration: 0.4,
-  drawerExitDelay: 0.35,
-  listTransitionDuration: 0.3,
-  itemDuration: 0.3,
-  itemStaggerDelay: 0.05,
-  itemEntranceDelay: 0.1,
-  titleDuration: 0.3,
-  bottomButtonDuration: 0.3,
-};
-
-// Focus ring classes
-const focusRingDarkBg =
-  "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-neutral-500 focus-visible:ring-offset-neutral-200 dark:focus-visible:ring-offset-neutral-900";
-const focusRingLightBg =
-  "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-neutral-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black";
 
 export const MobileMenu = ({
   isOpen,
@@ -74,7 +19,6 @@ export const MobileMenu = ({
   navItems = [],
   onItemClick,
   activeSubmenu,
-  animationConfig = defaultMobileAnimationConfig,
 }) => {
   const scrollContainerRef = useRef(null);
   const menuRef = useRef(null);
@@ -82,171 +26,117 @@ export const MobileMenu = ({
   // Scroll to top when submenu changes
   useEffect(() => {
     requestAnimationFrame(() => {
-      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "auto" });
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
     });
   }, [activeSubmenu]);
 
-  // Focus trapping and Escape key handling
+  // Close on Escape key
   useEffect(() => {
-    const handleEscape = (e) => {
-      // Removed type annotation
-      if (e.key === "Escape") {
-        onClose();
-      }
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose();
     };
-
-    if (isOpen) {
-      document.addEventListener("keydown", handleEscape);
-      const timer = setTimeout(() => {
-        menuRef.current?.focus();
-      }, 100);
-      return () => {
-        clearTimeout(timer);
-        document.removeEventListener("keydown", handleEscape);
-      };
-    }
+    if (isOpen) document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, onClose]);
 
-  // --- Animation Variants ---
-  const easeInQuint = [0.6, 0.05, 0.01, 0.9];
-  const easeOutExpo = [0.16, 1, 0.3, 1];
+  // Animation variants
+  const drawerVariants = {
+    hidden: {
+      x: "100%",
+      transition: {
+        type: "tween",
+        duration: 0.3,
+        ease: [0.6, 0.05, 0.01, 0.9],
+      },
+    },
+    visible: {
+      x: 0,
+      transition: { type: "tween", duration: 0.4, ease: [0.0, 0.0, 0.2, 1] },
+    },
+    exit: {
+      x: "100%",
+      transition: {
+        type: "tween",
+        duration: 0.3,
+        ease: [0.6, 0.05, 0.01, 0.9],
+        delay: 0.35,
+      },
+    },
+  };
 
-  const variants = useMemo(
-    () => ({
-      drawerVariants: {
-        hidden: {
-          x: "100%",
-          transition: {
-            type: "tween",
-            duration: animationConfig.drawerDuration * 0.75,
-            ease: easeInQuint,
-          },
-        },
-        visible: {
-          x: 0,
-          transition: {
-            type: "tween",
-            duration: animationConfig.drawerDuration,
-            ease: easeOutExpo,
-          },
-        },
-        exit: {
-          x: "100%",
-          transition: {
-            type: "tween",
-            duration: animationConfig.drawerDuration * 0.75,
-            ease: easeInQuint,
-            delay: animationConfig.drawerExitDelay,
-          },
-        },
-      },
-      listContainerVariants: {
-        initial: { opacity: 1, x: 0 }, // Start visible for transitions
-        animate: {
-          opacity: 1,
-          x: 0,
-          transition: {
-            delayChildren: animationConfig.itemEntranceDelay,
-            staggerChildren: animationConfig.itemStaggerDelay,
-            duration: animationConfig.listTransitionDuration,
-            ease: "easeOut",
-          },
-        },
-        exit: {
-          opacity: 1,
-          x: 0,
-          transition: {
-            staggerChildren: animationConfig.itemStaggerDelay,
-            staggerDirection: -1,
-            duration: animationConfig.listTransitionDuration * 0.66,
-            ease: "easeIn",
-            when: "afterChildren",
-          },
-        },
-      },
-      itemVariants: {
-        initial: { opacity: 0, x: 30 },
-        animate: {
-          opacity: 1,
-          x: 0,
-          transition: {
-            duration: animationConfig.itemDuration,
-            ease: "easeOut",
-          },
-        },
-        exit: {
-          opacity: 0,
-          x: -30,
-          transition: {
-            duration: animationConfig.itemDuration * 0.66,
-            ease: "easeIn",
-          },
-        },
-      },
-      titleVariants: {
-        initial: { opacity: 0, y: -10 },
-        animate: {
-          opacity: 1,
-          y: 0,
-          transition: { delay: 0.1, duration: animationConfig.titleDuration },
-        },
-        exit: {
-          opacity: 0,
-          y: -5,
-          transition: { duration: animationConfig.titleDuration * 0.5 },
-        },
-      },
-      bottomButtonVariants: {
-        initial: { opacity: 0, y: 20 },
-        animate: {
-          opacity: 1,
-          y: 0,
-          transition: {
-            delay:
-              animationConfig.itemEntranceDelay +
-              animationConfig.itemStaggerDelay * 3,
-            duration: animationConfig.bottomButtonDuration,
-            ease: "easeOut",
-          },
-        },
-        exit: {
-          opacity: 0,
-          y: 10,
-          transition: { duration: animationConfig.bottomButtonDuration * 0.5 },
-        },
-      },
-    }),
-    [animationConfig]
-  );
+  const listContainerVariants = {
+    initial: { opacity: 1 },
+    animate: {
+      opacity: 1,
+      transition: { staggerChildren: 0.05, delayChildren: 0.1 },
+    },
+    exit: {
+      opacity: 1,
+      transition: { staggerChildren: 0.04, staggerDirection: -1 },
+    },
+  };
 
-  // --- Icon Renderer ---
-  const renderIcon = useCallback((item) => {
-    // Removed type annotation
-    const iconSize = item.icon === "right" ? 16 : 20; // Smaller chevron
-    const IconComponent =
-      item.icon === "more"
-        ? MoreHorizontal
-        : item.icon === "topRight"
-        ? ExternalLink
-        : item.hasChildren || item.icon === "right"
-        ? ChevronRight
-        : null;
+  const itemVariants = {
+    initial: { opacity: 0, x: 30 },
+    animate: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.3, ease: "easeOut" },
+    },
+    exit: { opacity: 0, x: -30, transition: { duration: 0.2, ease: "easeIn" } },
+  };
 
-    return IconComponent ? (
-      <IconComponent
-        className={cn(
-          "flex-shrink-0",
-          item.variant === "mobileSubItem"
-            ? "size-4 text-neutral-500"
-            : "size-5 text-neutral-500" // Adjusted size/color
-        )}
-        strokeWidth={1.5}
-        aria-hidden="true"
-      />
-    ) : (
-      <div className="w-5 h-5 flex-shrink-0"></div>
-    ); // Placeholder for alignment
-  }, []); // Empty dependency array if it doesn't depend on external state/props
+  const titleVariants = {
+    initial: { opacity: 0, y: -10 },
+    animate: { opacity: 1, y: 0, transition: { delay: 0.1, duration: 0.3 } },
+    exit: { opacity: 0, y: -5, transition: { duration: 0.15 } },
+  };
+
+  const bottomButtonVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0, transition: { delay: 0.2, duration: 0.3 } },
+    exit: { opacity: 0, y: 10, transition: { duration: 0.15 } },
+  };
+  // --- End Animation Variants ---
+
+  // Icon rendering helper function using Carbon Icons
+  const renderIcon = (item) => {
+    const iconSize = 20; // Consistent size for mobile nav icons
+    const iconClasses =
+      "flex-shrink-0 w-5 h-5 text-neutral-500 dark:text-neutral-400";
+
+    if (item.icon === "more") {
+      // Use OverflowMenuHorizontal for 'more'
+      return (
+        <OverflowMenuHorizontal
+          size={iconSize}
+          className={iconClasses}
+          aria-hidden="true"
+        />
+      );
+    } else if (item.icon === "topRight") {
+      // Use ArrowUpRight for external links
+      return (
+        <ArrowUpRight
+          size={iconSize}
+          className={iconClasses}
+          aria-hidden="true"
+        />
+      );
+    } else if (item.hasChildren || item.icon === "right") {
+      return (
+        <ChevronRight
+          size={iconSize}
+          className={iconClasses}
+          aria-hidden="true"
+        />
+      );
+    }
+    // Return a placeholder div if no specific icon matches to maintain alignment
+    return <div className="w-5 h-5 flex-shrink-0" />;
+  };
 
   return (
     <AnimatePresence>
@@ -260,62 +150,51 @@ export const MobileMenu = ({
           initial="hidden"
           animate="visible"
           exit="exit"
-          variants={variants.drawerVariants}
+          variants={drawerVariants}
           className={cn(
             "fixed inset-y-0 right-0 w-full md:w-[400px]",
-            mobileDesignTokenMap.zIndex[110],
-            mobileDesignTokenMap.colors.neutral[200],
-            "flex flex-col overflow-hidden",
+            "z-[110] bg-neutral-200 dark:bg-neutral-900",
+            "flex flex-col overflow-hidden", // Keeps parent as flex column
             "antialiased outline-none"
           )}
           tabIndex={-1}
         >
           {/* Header */}
-          <div className={cn("relative flex-shrink-0 px-5 pt-6")}>
+          <div className="relative flex-shrink-0 px-5 pt-6">
             {/* Close Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Close menu"
-              onClick={onClose}
+            <button
               className={cn(
-                "absolute top-6 right-5",
-                "size-8 rounded-md",
-                mobileDesignTokenMap.colors.neutral[900],
-                focusRingDarkBg
+                "absolute top-6 right-5 z-[130]",
+                "w-8 h-8",
+                "flex items-center justify-center",
+                "text-neutral-900 dark:text-neutral-100",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-200 dark:focus-visible:ring-offset-neutral-900"
               )}
+              onClick={onClose}
+              aria-label="Close menu"
+              type="button"
             >
-              <X className="size-5" />
-            </Button>
+              {/* Replace Lucide X with Carbon Close */}
+              <Close size={20} aria-hidden="true" />
+            </button>
 
             {/* Title Area */}
-            <div
-              className={cn(
-                "mt-4 min-h-[70px] relative overflow-hidden w-full",
-                "border-b",
-                mobileDesignTokenMap.colors.neutral[400],
-                "px-2.5 py-[15px]",
-                "flex items-center"
-              )}
-            >
+            <div className="h-[70px]">
               <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeSubmenu || "main-title"}
-                  variants={variants.titleVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  className="flex items-center"
-                >
-                  <h2
-                    className={cn(
-                      "text-4xl font-semibold tracking-tighter leading-tight",
-                      mobileDesignTokenMap.colors.neutral[900]
-                    )}
+                {activeSubmenu && (
+                  <motion.div
+                    key={`title-${activeSubmenu}`}
+                    variants={titleVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    className="pt-10 pb-2.5 border-b border-neutral-400 dark:border-neutral-600 mb-5"
                   >
-                    {activeSubmenu || "Menu"}
-                  </h2>
-                </motion.div>
+                    <h2 className="text-neutral-900 dark:text-neutral-100 text-[30px] font-semibold tracking-[-0.04em] leading-tight m-0">
+                      {activeSubmenu}
+                    </h2>
+                  </motion.div>
+                )}
               </AnimatePresence>
             </div>
           </div>
@@ -323,136 +202,114 @@ export const MobileMenu = ({
           {/* Scrollable Content Area */}
           <div
             ref={scrollContainerRef}
-            className={cn(
-              "flex-grow overflow-y-auto overflow-x-hidden",
-              "px-5 pb-24" // Match PADDING_X_CONTAINER and PADDING_BOTTOM_SCROLL
-            )}
+            className="flex-grow overflow-y-auto overflow-x-hidden px-5 pb-24 relative flex flex-col" // Added flex flex-col here
           >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeSubmenu || "main-list"}
-                variants={variants.listContainerVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className={cn("w-full relative pb-5")}
-                role="menu"
-                aria-label={activeSubmenu || "Main menu"}
-              >
-                {navItems.map((item, index) => (
-                  <motion.div
-                    key={item.label + index + (activeSubmenu || "main")}
-                    variants={variants.itemVariants}
-                    role="none"
+            <motion.div
+              key={activeSubmenu || "main"}
+              variants={listContainerVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="w-full mt-auto" // Pushes content down if space allows
+              role="menu"
+              aria-label={activeSubmenu || "Main menu"}
+            >
+              {navItems.map((item, index) => (
+                <motion.div
+                  key={item.label + index}
+                  variants={itemVariants}
+                  role="none"
+                  className="border-b border-neutral-400 dark:border-neutral-600 last:border-b-0"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
                     className={cn(
-                      "border-b last:border-b-0",
-                      mobileDesignTokenMap.colors.neutral[400] // Divider color
+                      "py-[15px] px-2.5", // Item padding
+                      "flex justify-between items-center cursor-pointer w-full text-left",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-200 dark:focus-visible:ring-offset-neutral-900 focus-visible:ring-neutral-500", // Focus state
+                      "hover:bg-neutral-100 dark:hover:bg-neutral-800", // Hover state
+                      item.variant === "mobileSubItem" && "pl-4" // Indentation for sub-items
                     )}
+                    onClick={() => onItemClick(item)}
+                    aria-label={item.label}
                   >
-                    <button
-                      type="button"
-                      role="menuitem"
+                    <span
                       className={cn(
-                        "py-[15px] px-2.5",
-                        "flex justify-between items-center cursor-pointer w-full text-left",
-                        "focus:outline-none rounded-md",
-                        mobileDesignTokenMap.colors.neutral[50], // Hover background
-                        focusRingDarkBg, // Focus style
-                        item.variant === "mobileSubItem" ? "pl-4" : "" // Indentation
+                        "pr-2.5 leading-snug tracking-[-0.04em]",
+                        // Text styles based on state/variant
+                        !activeSubmenu
+                          ? "text-4xl font-semibold text-neutral-900 dark:text-neutral-100" // Root item
+                          : activeSubmenu.toLowerCase() === "more"
+                          ? "text-3xl font-semibold text-neutral-700 dark:text-neutral-200" // 'More' submenu
+                          : item.variant === "mobileChild"
+                          ? "text-3xl font-semibold text-neutral-700 dark:text-neutral-200" // Product submenu
+                          : "text-2xl font-normal text-neutral-500 dark:text-neutral-400" // Secondary link
                       )}
-                      onClick={() => onItemClick(item)}
-                      aria-label={item.label}
                     >
-                      <span
-                        className={cn(
-                          "pr-2.5 leading-snug tracking-tighter", // Base label style
-                          // Apply specific text styles based on state/variant
-                          !activeSubmenu
-                            ? "text-4xl font-semibold text-neutral-900 dark:text-neutral-100" // Root item style
-                            : activeSubmenu.toLowerCase() === "more"
-                            ? "text-3xl font-semibold text-neutral-700 dark:text-neutral-200" // 'More' submenu style
-                            : item.variant === "mobileChild"
-                            ? "text-3xl font-semibold text-neutral-700 dark:text-neutral-200" // Product submenu style
-                            : "text-2xl font-normal text-neutral-500 dark:text-neutral-400" // Default/Secondary link style
-                        )}
-                      >
-                        {item.label}
-                      </span>
-                      {(item.icon || item.hasChildren) && renderIcon(item)}
-                    </button>
-                  </motion.div>
-                ))}
-              </motion.div>
-            </AnimatePresence>
+                      {item.label}
+                    </span>
+                    {/* Render Carbon Icon */}
+                    {(item.icon || item.hasChildren) && renderIcon(item)}
+                  </button>
+                </motion.div>
+              ))}
+            </motion.div>
           </div>
 
           {/* Bottom Back/Close Button */}
           <motion.div
             key="bottom-button-container"
-            variants={variants.bottomButtonVariants}
+            variants={bottomButtonVariants}
             initial="initial"
             animate="animate"
             exit="exit"
-            className={cn(
-              "absolute bottom-5 left-5 right-5",
-              "flex justify-center",
-              mobileDesignTokenMap.zIndex[120]
-            )}
+            className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[120]" // Centered button
           >
-            <Button
-              variant="outline"
+            <button
+              type="button"
+              className={cn(
+                "flex items-center py-2.5 px-5",
+                "bg-white dark:bg-neutral-800",
+                "rounded-full shadow-lg", // Keep rounded for this button only
+                "border border-neutral-300 dark:border-neutral-700",
+                "gap-2.5 cursor-pointer",
+                "text-neutral-700 dark:text-neutral-200 text-lg font-medium tracking-[-0.02em] leading-none", // Text style
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-200 dark:focus-visible:ring-offset-neutral-800" // Focus state
+              )}
               onClick={
                 activeSubmenu ? () => onItemClick({ back: true }) : onClose
               }
-              aria-label={activeSubmenu ? "Back" : "Close menu"}
-              className={cn(
-                "inline-flex items-center justify-center gap-2.5 px-5 py-2.5",
-                "rounded-full",
-                mobileDesignTokenMap.boxShadow.lg,
-                mobileDesignTokenMap.colors.white,
-                "border",
-                mobileDesignTokenMap.colors.neutral[300],
-                "text-neutral-700 dark:text-neutral-200",
-                "text-xl font-normal",
-                focusRingLightBg
-              )}
+              aria-label={activeSubmenu ? "Go back" : "Close menu"}
             >
               <motion.span
-                className="flex items-center justify-center size-5"
-                animate={{ rotate: activeSubmenu ? 180 : 0 }}
+                className={cn(
+                  "w-5 h-5 flex items-center justify-center", // Icon wrapper
+                  "text-neutral-700 dark:text-neutral-200"
+                )}
+                // Animate rotation if needed, but maybe not for back/close
+                // animate={{ rotate: activeSubmenu ? 180 : 0 }}
                 transition={{ duration: 0.2 }}
               >
                 {activeSubmenu ? (
-                  <ArrowLeft className="size-4" aria-hidden="true" />
+                  // Replace Lucide ArrowLeft with Carbon ArrowLeft
+                  <ArrowLeft size={16} aria-hidden="true" />
                 ) : (
-                  <X className="size-4" aria-hidden="true" />
+                  // Replace Lucide X with Carbon Close
+                  <Close size={16} aria-hidden="true" />
                 )}
               </motion.span>
-              <span>{activeSubmenu ? "Back" : "Close"}</span>
-            </Button>
+              <span>
+                {" "}
+                {/* Text is part of the button */}
+                {activeSubmenu ? "Back" : "Close"}
+              </span>
+            </button>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
   );
-};
-
-MobileMenu.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  navItems: PropTypes.arrayOf(
-    PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      hasChildren: PropTypes.bool,
-      icon: PropTypes.oneOf(["right", "topRight", "more"]),
-      variant: PropTypes.oneOf(["mobile", "mobileChild", "mobileSubItem"]),
-      url: PropTypes.string,
-      back: PropTypes.bool,
-    })
-  ),
-  onItemClick: PropTypes.func.isRequired,
-  activeSubmenu: PropTypes.string.isRequired,
-  animationConfig: PropTypes.object, // Add more specific shape if needed
 };
 
 export default MobileMenu;

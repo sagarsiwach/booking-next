@@ -4,25 +4,23 @@
 import React, { useState, useEffect } from "react";
 import { DesktopNavigation } from "./DesktopNavigation";
 import { MobileNavigation } from "./MobileNavigation";
-// Import static data - ENSURE THIS PATH IS CORRECT
 import {
   desktopMenuItems,
   mobileMenuItems,
   motorbikesDropdownItems,
   scootersDropdownItems,
   moreDropdownItems,
-} from "../../../lib/navigation-data.js"; // Adjust path as necessary
-import PropTypes from "prop-types"; // Import prop-types
+} from "@/lib/navigation-data";
+import { cn } from "@/lib/utils";
 
-// Hook for Responsive Check (JavaScript version)
+// Hook for responsive detection
 const useMediaQuery = (query) => {
-  // Removed type annotations
   const [matches, setMatches] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const mediaQueryList = window.matchMedia(query);
-      const listener = (event) => setMatches(event.matches); // Removed type annotation
+      const listener = (event) => setMatches(event.matches);
 
       setMatches(mediaQueryList.matches);
 
@@ -46,10 +44,9 @@ const useMediaQuery = (query) => {
 };
 
 export const NavigationContainer = ({
-  logoColorClass,
-  logoHoverColorClass,
+  logoColorClass = "text-neutral-700 dark:text-neutral-200",
+  logoHoverColorClass = "hover:text-neutral-900 dark:hover:text-neutral-50",
 }) => {
-  // Breakpoint matches Tailwind's lg (1024px)
   const isMobile = useMediaQuery("(max-width: 1023px)");
   const [mounted, setMounted] = useState(false);
 
@@ -58,18 +55,23 @@ export const NavigationContainer = ({
   }, []);
 
   if (!mounted) {
-    // Render a placeholder matching NavBar height to prevent layout shift
+    // Placeholder to prevent layout shift
     return (
-      <div className="h-[81px] w-full bg-background border-b border-border"></div>
+      <div className="h-[81px] w-full bg-background border-b border-neutral-300 dark:border-neutral-700"></div>
     );
   }
 
   return (
-    <div className="w-full sticky top-0 left-0 bg-background z-50">
+    <div
+      className={cn(
+        "w-full sticky top-0 left-0 z-50",
+        "bg-white dark:bg-neutral-950"
+      )}
+    >
       {isMobile ? (
         <MobileNavigation
           logoColorClass={logoColorClass}
-          // Pass static data from imports
+          logoHoverColorClass={logoHoverColorClass}
           mobileMenuItems={mobileMenuItems}
           motorbikesDropdownItems={motorbikesDropdownItems}
           scootersDropdownItems={scootersDropdownItems}
@@ -79,7 +81,6 @@ export const NavigationContainer = ({
         <DesktopNavigation
           logoColorClass={logoColorClass}
           logoHoverColorClass={logoHoverColorClass}
-          // Pass static data from imports
           desktopMenuItems={desktopMenuItems}
           motorbikesDropdownItems={motorbikesDropdownItems}
           scootersDropdownItems={scootersDropdownItems}
@@ -88,11 +89,6 @@ export const NavigationContainer = ({
       )}
     </div>
   );
-};
-
-NavigationContainer.propTypes = {
-  logoColorClass: PropTypes.string,
-  logoHoverColorClass: PropTypes.string,
 };
 
 export default NavigationContainer;
