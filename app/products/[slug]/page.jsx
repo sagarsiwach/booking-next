@@ -1,306 +1,142 @@
 // app/products/[slug]/page.jsx
 import React from "react";
+import Image from "next/image";
 import { notFound } from "next/navigation";
-import PropTypes from "prop-types";
+import { fetchProductItemBySlug } from "@/lib/api";
 import { sanityClient } from "@/lib/sanityClient";
-import { cn } from "@/lib/utils";
-
-// --- Import ONLY the Section Components We Are Implementing Now ---
-import HeroSection from "@/components/features/products/HeroSection";
-import FeatureCarousel from "@/components/features/products/FeatureCarousel";
-import VideoSection from "@/components/features/products/VideoSection";
-import GallerySection from "@/components/features/products/GallerySection";
-import FaqSection from "@/components/features/products/FaqSection";
-import ConfiguratorSection from "@/components/features/products/ConfiguratorSection";
-import TestimonialSection from "@/components/features/products/TestimonialCarousel";
-import TechSpecsSection from "@/components/features/products/TechSpecsSection";
-// Skipping: TextBlock, CtaBlock, TextWithImageBlock
-
-// --- Generate Static Paths ---
-export async function generateStaticParams() {
-  try {
-    // No explicit type needed, fetch should infer string[] or handle errors
-    const slugs = await sanityClient.fetch(
-      `*[_type == "productPage" && defined(slug.current) && active == true].slug.current`
-    );
-    // Ensure slugs is an array before mapping
-    if (!Array.isArray(slugs)) {
-      console.error(
-        "generateStaticParams: Fetched slugs is not an array:",
-        slugs
-      );
-      return [];
-    }
-    return slugs.map((slug) => ({ slug }));
-  } catch (error) {
-    console.error("Error fetching slugs for generateStaticParams:", error);
-    return []; // Return empty array on error
-  }
-}
-
-// --- Generate Metadata ---
-export async function generateMetadata({ params }) {
-  const { slug } = params;
-  if (!slug) {
-    console.error("generateMetadata: Slug parameter is missing.");
-    return { title: "Invalid Product | Kabira Mobility" };
-  }
-
-  try {
-    // No explicit type needed here either
-    const product = await sanityClient.fetch(
-      `*[_type == "productPage" && slug.current == $slug && active == true][0]{
-              title,
-              "metaTitle": seo.metaTitle,
-              "metaDescription": seo.metaDescription,
-              "ogImageUrl": seo.ogImage.asset->url
-            }`,
-      { slug }
-    );
-
-    if (!product) {
-      // Let notFound() handle this in the page component if preferred,
-      // but setting metadata is still good practice.
-      return {
-        title: "Product Not Found | Kabira Mobility",
-        description: "The requested product could not be found.",
-      };
-    }
-
-    const pageTitle =
-      product.metaTitle || product.title || "Kabira Mobility Product";
-    const pageDescription =
-      product.metaDescription ||
-      `Explore the ${product.title || "Kabira Electric Vehicle"}`;
-
-    return {
-      title: `${pageTitle} | Kabira Mobility`,
-      description: pageDescription,
-      openGraph: {
-        title: pageTitle,
-        description: pageDescription,
-        images: product.ogImageUrl ? [{ url: product.ogImageUrl }] : [],
-      },
-    };
-  } catch (error) {
-    console.error(`Error fetching metadata for slug ${slug}:`, error);
-    return {
-      title: "Error | Kabira Mobility",
-      description: "Could not load product information.",
-    };
-  }
-}
-
-// --- Helper: Map Sanity Block Types to Components ---
-const blockComponents = {
-  heroSection: HeroSection,
-  featureCarousel: FeatureCarousel,
-  techSpecsSection: TechSpecsSection,
-  videoSection: VideoSection,
-  testimonialSection: TestimonialSection,
-  gallerySection: GallerySection,
-  productFaqs: FaqSection,
-  configuratorData: ConfiguratorSection,
-  // Skipped other block types
-};
 
 // --- Main Page Component ---
-export default async function ProductPage({ params }) {
-  const { slug } = params;
+export default async function ProductItemPage({ params }) {
+  // Keep params object
+  // --- Access slug *after* the await, as a diagnostic step ---
+  const productItemData = await fetchProductItemBySlug(params.slug);
 
-  if (!slug) {
-    console.error("ProductPage: Slug parameter is missing.");
-    notFound(); // Trigger 404 if slug is missing
-  }
-
-  let product;
-  try {
-    // Updated GROQ query to fetch frameCount and resolve necessary assets
-    product = await sanityClient.fetch(
-      `*[_type == "productPage" && slug.current == $slug && active == true][0]{
-                _id,
-                title,
-                "slug": slug.current,
-                relatedVehicle->{
-                    _id, // Include ID if needed
-                    name,
-                    "slug": modelCode.current,
-                    colors[]{ _key, name, colorStart, colorEnd, isDefault },
-                    frameCount // **** FETCH frameCount ****
-                },
-                seo,
-                pageBuilder[]{
-                    ..., // Get all base fields of the block
-                    _key,
-                    _type, // Essential for component mapping
-
-                    // --- Resolve references/assets within specific blocks ---
-                    _type == "productFaqs" => {
-                        ...,
-                        referencedFaqs[]->{_id, question, "answer": pt::text(answer)} // Get plain text answer
-                    },
-                    _type == "gallerySection" => {
-                        ...,
-                        images[]{ ..., _key, asset->{url, metadata{dimensions}}} // Resolve gallery image assets + dimensions
-                    },
-                    _type == "featureCarousel" => {
-                       ...,
-                       slides[]{
-                           ...,
-                           _key,
-                           image{..., asset->{url, metadata{dimensions}}}, // Resolve slide image assets + dimensions
-                           "overlayBgColorOverrideHex": overlayBgColorOverride.hex
-                       }
-                    },
-                    _type == "testimonialSection" => {
-                       ...,
-                       testimonials[]{
-                           ...,
-                           _key,
-                           authorImage{..., asset->{url, metadata{dimensions}}},
-                           backgroundImage{..., asset->{url, metadata{dimensions}}}
-                       }
-                     },
-                     _type == "videoSection" => {
-                        ...,
-                        videoFile{asset->{url, originalFilename, mimeType, size}},
-                        posterImage{..., asset->{url, metadata{dimensions}}}
-                     },
-                      _type == "heroSection" => {
-                           ...,
-                           image{..., asset->{url, metadata{dimensions}}},
-                           // Resolve internal link reference for CTA if it exists
-                           cta { ..., link { ..., _type == "link" && linkType == "internal" => { "internalSlug": @.internalReference->slug.current, "internalType": @.internalReference->_type } } }
-                      },
-                      _type == "configuratorData" => { // No specific asset resolution needed, but fetch overrides
-                        ...,
-                        sectionTitleOverride,
-                        sectionSubtitleOverride,
-                        initialFrameOverride,
-                        autoRotateOverride
-                        // Fetch other overrides if added to schema
-                     }
-                }
-            }`,
-      { slug }
-    );
-  } catch (error) {
-    console.error(`Error fetching product page data for slug ${slug}:`, error);
-    // Throwing error here might be better to trigger Next.js error handling
-    throw new Error(`Failed to load product page: ${slug}`);
-    // Or use notFound() if a fetch error should result in 404
-    // notFound();
-  }
-
-  // Handle Product Not Found
-  if (!product) {
-    console.log(`Product not found for slug: ${slug}`);
+  // --- Handle Not Found ---
+  if (!productItemData) {
+    // Log the slug that was not found
+    console.log(`Active productItem with slug "${params.slug}" not found.`);
     notFound();
   }
 
-  // Validate essential data for Configurator if it's present
-  const hasConfigurator = product.pageBuilder?.some(
-    (b) => b._type === "configuratorData"
-  );
-  if (
-    hasConfigurator &&
-    (!product.relatedVehicle?.slug || !product.relatedVehicle?.frameCount)
-  ) {
-    console.error(
-      `Missing critical data for Configurator on product page ${product._id}: relatedVehicle.slug or relatedVehicle.frameCount is undefined.`
-    );
-    // Decide how to handle this - show an error message, or maybe just don't render the configurator block?
-    // For now, we'll let the configurator component handle its internal error state.
-  }
+  // Now access the slug from params again or use the fetched one
+  const slug = params.slug; // Or use productItemData.slug
 
-  // Render the page using the Page Builder
+  // --- Destructure the basic data with robust fallbacks ---
+  const {
+    title = "Product Title",
+    slug: currentSlug, // Use slug from data if available
+    description,
+    mainImage,
+  } = productItemData;
+
   return (
-    <main className="min-h-screen w-full bg-background text-foreground">
-      {(product.pageBuilder || []).map((block) => {
-        // **** Added check for block and block._type ****
-        if (!block || !block._type) {
-          console.warn(
-            "Skipping block in pageBuilder due to missing data or _type:",
-            block
-          );
-          return null;
-        }
+    <main className="container mx-auto px-4 py-12">
+      <h1 className="text-4xl font-bold mb-4">{title}</h1>
 
-        const Component = blockComponents[block._type];
+      <p className="text-lg text-gray-600 mb-2">
+        Slug: /products/{currentSlug || slug || "..."}
+      </p>
 
-        if (!Component) {
-          console.warn(`No component found for block type: ${block._type}`);
-          if (process.env.NODE_ENV === "development") {
-            return (
-              <div
-                key={block._key || Math.random()} // Fallback key
-                className="container mx-auto my-8 p-4 border border-dashed border-red-500 bg-red-50"
-              >
-                <p className="font-bold text-red-700">
-                  Missing Component for Block Type: '{block._type}'
-                </p>
-                <pre className="text-xs text-red-600 overflow-auto bg-red-100 p-2 rounded mt-2 max-h-60">
-                  {JSON.stringify(block, null, 2)}
-                </pre>
-              </div>
-            );
-          }
-          return null; // Don't render unknown blocks in production
-        }
-
-        // Construct productContext more carefully
-        const productContextValue = {
-          id: product._id,
-          title: product.title,
-          slug: product.slug, // Use the fetched slug
-          // Only include relatedVehicle if it exists
-          relatedVehicle: product.relatedVehicle
-            ? {
-                name: product.relatedVehicle.name,
-                slug: product.relatedVehicle.slug, // Already fetched as modelCode.current
-                colors: product.relatedVehicle.colors || [],
-                frameCount: product.relatedVehicle.frameCount, // Pass frameCount
-              }
-            : null, // Pass null if relatedVehicle wasn't fetched or linked
-        };
-
-        // Add specific check before rendering Configurator
-        if (
-          block._type === "configuratorData" &&
-          !productContextValue.relatedVehicle?.frameCount
-        ) {
-          console.warn(
-            `Skipping ConfiguratorSection for product ${product.title} because frameCount is missing.`
-          );
-          if (process.env.NODE_ENV === "development") {
-            return (
-              <div
-                key={block._key}
-                className="container mx-auto my-4 p-4 bg-yellow-100 border border-yellow-400 text-yellow-800"
-              >
-                Configurator skipped: Missing 'frameCount' in related vehicle
-                data.
-              </div>
-            );
-          }
-          return null;
-        }
-
-        return (
-          <Component
-            key={block._key}
-            block={block}
-            productContext={productContextValue} // Pass constructed context
+      {mainImage?.asset?.url ? (
+        <div className="mb-6 relative aspect-video max-w-2xl bg-gray-100 rounded overflow-hidden">
+          <Image
+            src={mainImage.asset.url}
+            alt={mainImage.alt || "Product image"} // Ensure alt text is always a string
+            fill
+            className="object-contain"
+            sizes="(max-width: 768px) 100vw, 50vw"
+            priority
+            placeholder={mainImage.asset.metadata?.lqip ? "blur" : "empty"}
+            blurDataURL={mainImage.asset.metadata?.lqip}
           />
-        );
-      })}
+        </div>
+      ) : (
+        <div className="mb-6 aspect-video max-w-2xl bg-gray-200 rounded flex items-center justify-center text-gray-500">
+          (No Image Uploaded in CMS)
+        </div>
+      )}
+
+      {description ? ( // Render description only if it's not null/empty
+        <div className="prose max-w-none">
+          <h2 className="text-2xl font-semibold mb-2">Description</h2>
+          <p style={{ whiteSpace: "pre-wrap" }}>{description}</p>
+        </div>
+      ) : (
+        <div className="prose max-w-none">
+          <h2 className="text-2xl font-semibold mb-2">Description</h2>
+          <p className="text-gray-500 italic">
+            (No description provided in CMS)
+          </p>
+        </div>
+      )}
+
+      <div className="mt-12 p-4 border border-dashed border-gray-300">
+        <p className="text-center text-gray-500">
+          [Future content sections will go here]
+        </p>
+      </div>
     </main>
   );
 }
 
-// Define PropTypes for the Page component's props (params)
-ProductPage.propTypes = {
-  params: PropTypes.shape({
-    slug: PropTypes.string, // Slug might be undefined during initial render phases
-  }).isRequired,
-};
+// --- Generate Metadata (More Robust Checks) ---
+export async function generateMetadata({ params: { slug } }) {
+  const productItemData = await fetchProductItemBySlug(slug);
+
+  if (!productItemData) {
+    return {
+      title: "Product Not Found",
+      robots: { index: false }, // Prevent indexing not found pages
+    };
+  }
+
+  // --- Provide safe defaults for all values ---
+  const pageTitle = productItemData.title ?? "Kabira Mobility Product"; // Use ?? for null/undefined
+  // Ensure description is always a string
+  const pageDescription = (productItemData.description ?? "").substring(0, 160);
+  // Ensure ogImageUrl is null if asset or url is missing
+  const ogImageUrl = productItemData.mainImage?.asset?.url ?? null;
+
+  // --- Build OpenGraph object carefully ---
+  const openGraphData = {
+    title: pageTitle,
+    description: pageDescription,
+    type: "product", // Correct type
+    // Only include 'images' key if ogImageUrl is a valid string
+    ...(ogImageUrl &&
+      typeof ogImageUrl === "string" && { images: [{ url: ogImageUrl }] }),
+  };
+
+  console.log("Generated Metadata:", {
+    // Log the final object
+    title: pageTitle,
+    description: pageDescription,
+    openGraph: openGraphData,
+  });
+
+  return {
+    title: pageTitle,
+    description: pageDescription,
+    openGraph: openGraphData,
+  };
+}
+
+// --- Generate Static Params (Keep as is, filter added previously) ---
+export async function generateStaticParams() {
+  const query = `*[_type == "productItem" && defined(slug.current) && active == true]{ "slug": slug.current }`;
+  try {
+    const slugs = await sanityClient.fetch(query);
+    console.log(`Generating static params for ${slugs.length} product items.`);
+    return slugs
+      .filter((item) => typeof item.slug === "string" && item.slug.length > 0)
+      .map((item) => ({
+        slug: item.slug,
+      }));
+  } catch (error) {
+    console.error(
+      "Failed to fetch slugs for generateStaticParams (productItem):",
+      error
+    );
+    return [];
+  }
+}
