@@ -4,13 +4,20 @@
 /* Define custom dark variant using native CSS nesting */
 @custom-variant dark (&:is(.dark *));
 
-/* Define theme variables (already present from Shadcn init) */
+/* Define theme variables with corrected font definitions for Tailwind 4 */
 @theme {
   /* ... Your existing theme variables ... */
    --color-background: var(--background);
    --color-foreground: var(--foreground);
-   --font-sans: var(--font-geist-sans);
-   --font-mono: var(--font-geist-mono);
+   
+   /* Updated font definitions to ensure proper font loading */
+   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+   
+   /* This ensures the raw variables are accessible directly */
+   --font-geist-sans: var(--font-geist-sans);
+   --font-geist-mono: var(--font-geist-mono);
+   
    /* ... other variable mappings ... */
    --color-ring: var(--ring);
    --color-input: var(--input);
@@ -89,9 +96,12 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  code, pre {
+    @apply font-mono;
   }
 }
 
@@ -139,6 +149,26 @@
 @keyframes slide-out-to-bottom {
   from { transform: translateY(0); }
   to { transform: translateY(100%); }
+}
+
+@keyframes slide-in-from-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-out-to-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes slide-in-from-top {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slide-out-to-top {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100%); }
 }
 
 /* Make sure these selectors exist */

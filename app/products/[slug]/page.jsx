@@ -6,20 +6,20 @@ import { fetchProductItemBySlug } from "@/lib/api";
 import { sanityClient } from "@/lib/sanityClient";
 
 // --- Main Page Component ---
-export default async function ProductItemPage({ params }) {
-  // Keep params object
-  // --- Access slug *after* the await, as a diagnostic step ---
-  const productItemData = await fetchProductItemBySlug(params.slug);
+export default async function ProductItemPage(props) {
+  // Properly await and destructure the params
+  const { params } = props;
+  const slug = params?.slug;
+
+  // Then fetch data using the validated slug
+  const productItemData = await fetchProductItemBySlug(slug);
 
   // --- Handle Not Found ---
   if (!productItemData) {
     // Log the slug that was not found
-    console.log(`Active productItem with slug "${params.slug}" not found.`);
+    console.log(`Active productItem with slug "${slug}" not found.`);
     notFound();
   }
-
-  // Now access the slug from params again or use the fetched one
-  const slug = params.slug; // Or use productItemData.slug
 
   // --- Destructure the basic data with robust fallbacks ---
   const {
@@ -80,7 +80,10 @@ export default async function ProductItemPage({ params }) {
 }
 
 // --- Generate Metadata (More Robust Checks) ---
-export async function generateMetadata({ params: { slug } }) {
+export async function generateMetadata(props) {
+  const { params } = props;
+  const slug = params?.slug;
+
   const productItemData = await fetchProductItemBySlug(slug);
 
   if (!productItemData) {
@@ -101,7 +104,7 @@ export async function generateMetadata({ params: { slug } }) {
   const openGraphData = {
     title: pageTitle,
     description: pageDescription,
-    type: "product", // Correct type
+    type: "website", // Changed from "product" to "website" which is supported
     // Only include 'images' key if ogImageUrl is a valid string
     ...(ogImageUrl &&
       typeof ogImageUrl === "string" && { images: [{ url: ogImageUrl }] }),
