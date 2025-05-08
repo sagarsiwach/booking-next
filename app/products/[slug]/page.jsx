@@ -1,145 +1,165 @@
 // app/products/[slug]/page.jsx
 import React from "react";
-import Image from "next/image";
 import { notFound } from "next/navigation";
-import { fetchProductItemBySlug } from "@/lib/api";
-import { sanityClient } from "@/lib/sanityClient";
+import { fetchProductItemBySlug, fetchActiveProductSlugs } from "@/lib/api"; // Updated import
+// import { sanityClient } from "@/lib/sanityClient"; // No longer directly needed here for fetching
+
+// Import your block components
+import HeroSection from "@/components/features/products/HeroSection";
+import ConfiguratorSection from "@/components/features/products/ConfiguratorSection";
+// Import other block components as you create/need them
+// import FaqSection from "@/components/features/products/FaqSection";
+// import TextWithImageSection from "@/components/features/products/TextWithImageSection"; // Example
+
+// --- Component Mapper ---
+const blockComponents = {
+  heroSectionBlock: HeroSection,
+  configuratorSectionBlock: ConfiguratorSection,
+  // faqBlock: FaqSection,
+  // textWithImageBlock: TextWithImageSection,
+  // Add other mappings here
+};
 
 // --- Main Page Component ---
-export default async function ProductItemPage(props) {
-  // Properly await and destructure the params
-  const { params } = props;
+export default async function ProductItemPage({ params }) {
+  // No need for props, directly use params
   const slug = params?.slug;
 
-  // Then fetch data using the validated slug
-  const productItemData = await fetchProductItemBySlug(slug);
-
-  // --- Handle Not Found ---
-  if (!productItemData) {
-    // Log the slug that was not found
-    console.log(`Active productItem with slug "${slug}" not found.`);
+  if (!slug) {
+    console.error("ProductItemPage: Slug is missing from params.");
     notFound();
   }
 
-  // --- Destructure the basic data with robust fallbacks ---
-  const {
-    title = "Product Title",
-    slug: currentSlug, // Use slug from data if available
-    description,
-    mainImage,
-  } = productItemData;
+  const productItemData = await fetchProductItemBySlug(slug);
+
+  if (!productItemData) {
+    console.log(
+      `ProductItemPage: Active productItem with slug "${slug}" not found.`
+    );
+    notFound();
+  }
+
+  const { title, pageBuilder = [] } = productItemData;
+
+  // --- Product Context for child components ---
+  // This is where you'd pass down any top-level product data
+  // that individual blocks might need (e.g., related vehicle for configurator)
+  // For now, it's minimal. Expand as needed based on Sanity data structure.
+  const productContext = {
+    id: productItemData._id,
+    title: productItemData.title,
+    slug: productItemData.slug,
+    // Example: If 'productItem' links to a 'vehicle' document that has configurator details:
+    // relatedVehicle: productItemData.relatedVehicle // (You'd fetch this in your GROQ query if needed)
+    // For your current `ConfiguratorSection`, it expects `relatedVehicle.slug`, `relatedVehicle.colors`, `relatedVehicle.frameCount`
+    // So, if your `productItem` Sanity document has a reference field named `vehicleData` that points to your `vehicle` document,
+    // your GROQ query would need to fetch it like:
+    // ...,
+    // "relatedVehicle": vehicleData->{
+    //   "slug": modelCode.current, // Assuming modelCode in vehicle schema is for configurator path
+    //   colors[]{ name, "slug": slug.current, isDefault, "colorValue": colorStart.hex }, // Adjust to your vehicle color schema
+    //   "frameCount": configuratorSetup.frameCount // Adjust to your vehicle frameCount schema
+    // }
+    // For now, let's assume ConfiguratorSection gets these directly from its own block props if designed that way,
+    // or we'll need to adjust the GROQ.
+    // Based on your ConfiguratorSection.jsx, it seems to expect this from `productContext.relatedVehicle`.
+    // Let's mock it for now if not fetched, or ensure your GROQ for `productItem` fetches it.
+
+    // **IMPORTANT**: For the ConfiguratorSection to work as written,
+    // `productItemData` needs a `relatedVehicle` field that looks like:
+    // relatedVehicle: { slug: "km3000", colors: [{name: "Red", slug:"red", isDefault: true}], frameCount: 360 }
+    // Adjust your `fetchProductItemBySlug` GROQ if `productItem` links to a `vehicle` document.
+    // If `configuratorSectionBlock` itself contains `modelCode`, `colors`, `frameCount`, then this context is less critical for it.
+    // Your `configuratorSectionBlock` in Sanity has `modelCode`, `frameCount`, `colors`. So, it's self-contained.
+    // Let's simplify the context for now.
+  };
 
   return (
-    <main className="container mx-auto px-4 py-12">
-      <h1 className="text-4xl font-bold mb-4">{title}</h1>
+    <main>
+      {/* Optional: Render a global page title if not handled by a hero */}
+      {/* <h1 className="text-4xl font-bold mb-8 text-center">{title || "Product"}</h1> */}
 
-      <p className="text-lg text-gray-600 mb-2">
-        Slug: /products/{currentSlug || slug || "..."}
-      </p>
-
-      {mainImage?.asset?.url ? (
-        <div className="mb-6 relative aspect-video max-w-2xl bg-gray-100 rounded overflow-hidden">
-          <Image
-            src={mainImage.asset.url}
-            alt={mainImage.alt || "Product image"} // Ensure alt text is always a string
-            fill
-            className="object-contain"
-            sizes="(max-width: 768px) 100vw, 50vw"
-            priority
-            placeholder={mainImage.asset.metadata?.lqip ? "blur" : "empty"}
-            blurDataURL={mainImage.asset.metadata?.lqip}
-          />
-        </div>
+      {pageBuilder && pageBuilder.length > 0 ? (
+        pageBuilder.map((block) => {
+          const Component = blockComponents[block._type];
+          if (!Component) {
+            console.warn(`No component found for block type: ${block._type}`);
+            return (
+              <div
+                key={block._key}
+                className="container mx-auto px-4 py-8 my-4 border border-dashed border-red-400 bg-red-50"
+              >
+                <p className="text-red-700">
+                  <strong>Warning:</strong> Component for block type "
+                  <code>{block._type}</code>" is not implemented.
+                </p>
+                <pre className="text-xs bg-red-100 p-2 overflow-auto mt-2">
+                  {JSON.stringify(block, null, 2)}
+                </pre>
+              </div>
+            );
+          }
+          // Pass the block data and the product context to each component
+          return (
+            <Component
+              key={block._key}
+              block={block}
+              productContext={productContext}
+            />
+          );
+        })
       ) : (
-        <div className="mb-6 aspect-video max-w-2xl bg-gray-200 rounded flex items-center justify-center text-gray-500">
-          (No Image Uploaded in CMS)
-        </div>
-      )}
-
-      {description ? ( // Render description only if it's not null/empty
-        <div className="prose max-w-none">
-          <h2 className="text-2xl font-semibold mb-2">Description</h2>
-          <p style={{ whiteSpace: "pre-wrap" }}>{description}</p>
-        </div>
-      ) : (
-        <div className="prose max-w-none">
-          <h2 className="text-2xl font-semibold mb-2">Description</h2>
-          <p className="text-gray-500 italic">
-            (No description provided in CMS)
+        <div className="container mx-auto px-4 py-12 text-center">
+          <p className="text-xl text-gray-500">
+            This product page has no content sections defined yet.
           </p>
         </div>
       )}
-
-      <div className="mt-12 p-4 border border-dashed border-gray-300">
-        <p className="text-center text-gray-500">
-          [Future content sections will go here]
-        </p>
-      </div>
     </main>
   );
 }
 
-// --- Generate Metadata (More Robust Checks) ---
-export async function generateMetadata(props) {
-  const { params } = props;
+// --- Generate Metadata (Adjusted to use the new fetch function) ---
+export async function generateMetadata({ params }) {
   const slug = params?.slug;
+  if (!slug) return { title: "Product Not Found" };
 
   const productItemData = await fetchProductItemBySlug(slug);
 
   if (!productItemData) {
     return {
       title: "Product Not Found",
-      robots: { index: false }, // Prevent indexing not found pages
+      robots: { index: false },
     };
   }
 
-  // --- Provide safe defaults for all values ---
-  const pageTitle = productItemData.title ?? "Kabira Mobility Product"; // Use ?? for null/undefined
-  // Ensure description is always a string
-  const pageDescription = (productItemData.description ?? "").substring(0, 160);
-  // Ensure ogImageUrl is null if asset or url is missing
-  const ogImageUrl = productItemData.mainImage?.asset?.url ?? null;
+  const pageTitle = productItemData.title || "Kabira Mobility Product";
+  // For meta description, you'd ideally pull from an SEO field in Sanity.
+  // Falling back to a generic one or the first bit of text content.
+  const pageDescription =
+    productItemData.seo?.metaDescription ||
+    `Learn more about ${pageTitle} from Kabira Mobility.`; // Example fallback
 
-  // --- Build OpenGraph object carefully ---
-  const openGraphData = {
-    title: pageTitle,
-    description: pageDescription,
-    type: "website", // Changed from "product" to "website" which is supported
-    // Only include 'images' key if ogImageUrl is a valid string
-    ...(ogImageUrl &&
-      typeof ogImageUrl === "string" && { images: [{ url: ogImageUrl }] }),
-  };
-
-  console.log("Generated Metadata:", {
-    // Log the final object
-    title: pageTitle,
-    description: pageDescription,
-    openGraph: openGraphData,
-  });
+  const ogImage =
+    productItemData.seo?.ogImage?.asset?.url ||
+    productItemData.pageBuilder?.find((b) => b._type === "heroSectionBlock")
+      ?.image?.asset?.url;
 
   return {
     title: pageTitle,
-    description: pageDescription,
-    openGraph: openGraphData,
+    description: pageDescription.substring(0, 160),
+    openGraph: {
+      title: pageTitle,
+      description: pageDescription.substring(0, 160),
+      type: "website", // Or "product" if you have specific product OG type data
+      ...(ogImage && { images: [{ url: ogImage }] }),
+    },
   };
 }
 
-// --- Generate Static Params (Keep as is, filter added previously) ---
+// --- Generate Static Params (Using the new fetch function) ---
 export async function generateStaticParams() {
-  const query = `*[_type == "productItem" && defined(slug.current) && active == true]{ "slug": slug.current }`;
-  try {
-    const slugs = await sanityClient.fetch(query);
-    console.log(`Generating static params for ${slugs.length} product items.`);
-    return slugs
-      .filter((item) => typeof item.slug === "string" && item.slug.length > 0)
-      .map((item) => ({
-        slug: item.slug,
-      }));
-  } catch (error) {
-    console.error(
-      "Failed to fetch slugs for generateStaticParams (productItem):",
-      error
-    );
-    return [];
-  }
+  const slugs = await fetchActiveProductSlugs(); // Uses the updated function
+  console.log(`Generating static params for ${slugs.length} product items.`);
+  return slugs; // `fetchActiveProductSlugs` already returns the correct format [{slug: '...'}, ...]
 }

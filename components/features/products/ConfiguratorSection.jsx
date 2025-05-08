@@ -12,26 +12,22 @@ import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useDrag } from "@use-gesture/react"; // Only importing useDrag for now
+import { useDrag } from "@use-gesture/react";
 import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
 import { InertiaPlugin } from "gsap/InertiaPlugin";
 
-// --- Register GSAP Plugin (Run Once) ---
 if (typeof window !== "undefined") {
   gsap.registerPlugin(InertiaPlugin);
-  // If using @gsap/react hook for the inertia tween, explicit global registration might not be strictly necessary,
-  // but it's generally safer and clearer, especially if GSAP is used elsewhere.
 }
 
-// --- Constants & Defaults ---
 const MIN_VELOCITY_THRESHOLD = 0.01;
-const PRELOAD_WINDOW = 5;
-const FRAME_COUNT_DEFAULT = 360; // Ensure this is overridden by Sanity data
+const PRELOAD_WINDOW = 5; // Number of images to preload on either side of current
+const FRAME_COUNT_DEFAULT = 72; // A more common default for turntables
 
-// --- Helper Functions ---
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-const slugify = (text) =>
+const slugify = (
+  text // Already present in your code
+) =>
   text
     ? text
         .toLowerCase()
@@ -39,9 +35,7 @@ const slugify = (text) =>
         .replace(/[^a-z0-9_]/g, "")
     : "";
 
-// Dynamic URL Generation (Matches your R2 structure)
 const generateImageUrls = (count, size, modelSlug, colorSlug) => {
-  // Basic validation
   if (!modelSlug || !colorSlug || !size || !count || count <= 0) {
     console.warn("generateImageUrls missing required parameters:", {
       count,
@@ -53,7 +47,7 @@ const generateImageUrls = (count, size, modelSlug, colorSlug) => {
   }
   const urls = [];
   const baseUrl = `https://images.kabiramobility.com/processed_images/${modelSlug}/${colorSlug}/${size}/`;
-  const prefix = `${modelSlug}_${colorSlug}_`;
+  const prefix = `${modelSlug}_${colorSlug}_`; // Assuming this prefix convention
   const suffix = `_${size}.avif`;
   for (let i = 1; i <= count; i++) {
     urls.push(`${baseUrl}${prefix}${String(i).padStart(3, "0")}${suffix}`);
@@ -61,57 +55,48 @@ const generateImageUrls = (count, size, modelSlug, colorSlug) => {
   return urls;
 };
 
-// ========================
-//      MAIN COMPONENT
-// ========================
 export default function ConfiguratorSection({ block, productContext }) {
-  // --- Props Destructuring ---
   const {
-    sectionTitleOverride,
-    sectionSubtitleOverride,
-    initialFrameOverride,
-    autoRotateOverride,
-    className, // Allow passing className for section styling
+    modelCode, // From block
+    frameCount: frameCountFromBlock, // From block
+    colors: colorsFromBlock = [], // From block
+    sectionTitle: blockSectionTitle, // From block (was sectionTitleOverride)
+    sectionSubtitle: blockSectionSubtitle, // From block (was sectionSubtitleOverride)
+    initialFrameOverride, // Optional override from block props
+    autoRotateOverride, // Optional override
+    className, // For section styling
+    // Other potential block-specific display props
+    backgroundColor = "transparent",
+    imageFit = "contain",
+    dragSensitivity = 1.2,
+    resetDoubleClickDelay = 300,
+    autoRotate: autoRotateFromBlock = false, // autoRotate setting from block itself
+    autoRotateSpeed = 0.3,
+    autoRotateDirection = "clockwise",
+    loadingTimeout = 45000,
+    useCustomCursor = true,
+    cursorSize = 60,
+    cursorBgColor = "rgba(50, 50, 50, 0.9)",
+    cursorTextColor = "#FFFFFF",
+    cursorText = "DRAG",
+    cursorFont = "600 12px 'Geist', sans-serif", // Ensure Geist is loaded or use system
+    debugMode = false,
   } = block || {};
 
-  const { relatedVehicle } = productContext || {};
-  const modelSlug = relatedVehicle?.slug;
-  const colors = relatedVehicle?.colors || [];
-  const frameCount = relatedVehicle?.frameCount || FRAME_COUNT_DEFAULT; // ** CRUCIAL: Get from Sanity **
+  const frameCount = frameCountFromBlock || FRAME_COUNT_DEFAULT;
+  const autoRotate = autoRotateOverride ?? autoRotateFromBlock; // Prioritize override
 
-  // Determine initial color
-  const defaultColor = useMemo(
-    () => colors.find((c) => c.isDefault) || colors[0],
-    [colors]
+  const defaultColorFromBlock = useMemo(
+    () => colorsFromBlock.find((c) => c.isDefault) || colorsFromBlock[0],
+    [colorsFromBlock]
   );
+
+  // `defaultColorFromBlock.slug` should already be the resolved string from GROQ
   const initialColorSlug = useMemo(
-    () => slugify(defaultColor?.name),
-    [defaultColor]
+    () => defaultColorFromBlock?.slug,
+    [defaultColorFromBlock]
   );
 
-  // Component Config (Defaults overridden by block props if provided)
-  const initialFrame = initialFrameOverride ?? 0;
-  const backgroundColor = block?.backgroundColor ?? "transparent"; // Example: Allow overriding bg
-  const imageFit = block?.imageFit ?? "contain";
-  const dragSensitivity = block?.dragSensitivity ?? 1.2;
-  const allowZoom = block?.allowZoom ?? false; // Keeping zoom disabled for simplicity now
-  const minZoom = block?.minZoom ?? 1;
-  const maxZoom = block?.maxZoom ?? 1; // Effectively disabled
-  // const zoomSensitivity = block?.zoomSensitivity ?? 0.004;
-  const resetDoubleClickDelay = block?.resetDoubleClickDelay ?? 300;
-  const autoRotate = autoRotateOverride ?? block?.autoRotate ?? false;
-  const autoRotateSpeed = block?.autoRotateSpeed ?? 0.3;
-  const autoRotateDirection = block?.autoRotateDirection ?? "clockwise";
-  const loadingTimeout = block?.loadingTimeout ?? 45000;
-  const useCustomCursor = block?.useCustomCursor ?? true;
-  const cursorSize = block?.cursorSize ?? 60;
-  const cursorBgColor = block?.cursorBgColor ?? "rgba(50, 50, 50, 0.9)";
-  const cursorTextColor = block?.cursorTextColor ?? "#FFFFFF";
-  const cursorText = block?.cursorText ?? "DRAG";
-  const cursorFont = block?.cursorFont ?? "600 12px 'Geist', sans-serif";
-  const debugMode = block?.debugMode ?? false;
-
-  // --- Responsive Image Size ---
   const isLg = useMediaQuery("(min-width: 1601px)");
   const isMd = useMediaQuery("(min-width: 1025px) and (max-width: 1600px)");
   const isTablet = useMediaQuery("(min-width: 641px) and (max-width: 1024px)");
@@ -122,44 +107,30 @@ export default function ConfiguratorSection({ block, productContext }) {
     return "phone";
   }, [isLg, isMd, isTablet]);
 
-  // --- State ---
   const [currentVisualFrame, setCurrentVisualFrame] = useState(0);
-  const [zoomState, setZoomState] = useState(minZoom);
-  const [panOffsetState, setPanOffsetState] = useState({ x: 0, y: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingError, setLoadingError] = useState(null);
-  const [isInteracting, setIsInteracting] = useState(false); // For cursor/auto-rotate logic
+  const [isInteracting, setIsInteracting] = useState(false);
   const [isCursorVisible, setIsCursorVisible] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [devicePixelRatioState, setDevicePixelRatioState] = useState(1);
-  const [currentColorSlug, setCurrentColorSlug] = useState(initialColorSlug);
+  const [currentColorSlug, setCurrentColorSlug] = useState(initialColorSlug); // Initialized with resolved slug
 
-  // --- Refs ---
   const canvasRef = useRef(null);
-  const containerRef = useRef(null); // Ref for the main container div for gestures
+  const containerRef = useRef(null);
   const customCursorRef = useRef(null);
   const imageElementsRef = useRef([]);
   const imageLoadingStatusRef = useRef({});
   const imageUrlsRef = useRef([]);
-  const autoRotateIntervalRef = useRef(null); // Still useful for interval-based rotation if GSAP approach changes
   const lastClickTimeRef = useRef(0);
   const loadingTimeoutRef = useRef(null);
   const isMountedRef = useRef(false);
-  const targetFrameRef = useRef(initialFrame); // Precise frame for GSAP/physics
-  const gsapAnimationRef = useRef(null); // Store GSAP tween
+  const targetFrameRef = useRef(initialFrameOverride ?? 0);
+  const gsapAnimationRef = useRef(null);
 
-  // --- GSAP Context ---
-  // useGSAP provides automatic cleanup for animations created within its scope
-  const { contextSafe } = useGSAP(
-    () => {
-      // We can define GSAP-related functions here if needed,
-      // but the main inertia tween is created within the useDrag handler.
-    },
-    { scope: containerRef }
-  ); // Scope animations to the container element
+  const { contextSafe } = useGSAP(() => {}, { scope: containerRef });
 
-  // --- Logging ---
   const log = useCallback(
     (...args) => {
       if (debugMode) console.log("[Configurator]", ...args);
@@ -167,7 +138,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     [debugMode]
   );
 
-  // --- Image Loading (Callback) ---
   const updateLoadingProgress = useCallback(() => {
     if (!isMountedRef.current) return;
     const total = imageUrlsRef.current.length;
@@ -184,32 +154,36 @@ export default function ConfiguratorSection({ block, productContext }) {
     ).length;
     const progress = Math.round(((loaded + errored) / total) * 100);
     setLoadingProgress(progress);
+
     if (loaded + errored === total) {
       log(`All images processed (${loaded} loaded, ${errored} errors)`);
       setIsLoading(false);
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       if (errored > 0 && !loadingError) {
-        setLoadingError(`Failed to load ${errored} image(s).`);
+        // Do not set error here if some images loaded, allow user to interact
+        // setLoadingError(`Failed to load ${errored} image(s).`);
       }
     }
-  }, [log, loadingError]); // Removed autoRotate dependencies here
+  }, [log, loadingError]); // Removed frameCount from deps
 
   const loadImage = useCallback(
     (index) => {
       if (
         !isMountedRef.current ||
         index < 0 ||
-        index >= frameCount ||
+        index >= frameCount || // Use the actual frameCount
         !imageUrlsRef.current[index]
-      )
+      ) {
         return;
+      }
       const status = imageLoadingStatusRef.current[index];
-      if (status === "loaded" || status === "loading") return;
+      if (status === "loaded" || status === "loading") {
+        return;
+      }
 
       imageLoadingStatusRef.current[index] = "loading";
       const url = imageUrlsRef.current[index];
       const img = new window.Image();
-
       img.onload = () => {
         if (
           !isMountedRef.current ||
@@ -228,7 +202,8 @@ export default function ConfiguratorSection({ block, productContext }) {
           return;
         imageLoadingStatusRef.current[index] = "error";
         log(`Error loading frame ${index}: ${url}`);
-        setLoadingError((prev) => prev || `Error loading image ${index}.`);
+        // Don't set global error if only a few frames fail.
+        // setLoadingError((prev) => prev || `Error loading image ${index}.`);
         updateLoadingProgress();
       };
       img.src = url;
@@ -247,7 +222,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     [frameCount, loadImage]
   );
 
-  // --- Drawing Logic (Callback) ---
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -286,23 +260,28 @@ export default function ConfiguratorSection({ block, productContext }) {
         drawX = 0,
         drawY = 0;
 
-      // Calculate 'contain' dimensions
-      if (imgAspect > canvasAspect) {
-        drawWidth = canvasWidth;
-        drawHeight = drawWidth / imgAspect;
-        drawY = (canvasHeight - drawHeight) / 2;
+      if (imageFit === "contain") {
+        if (imgAspect > canvasAspect) {
+          drawWidth = canvasWidth;
+          drawHeight = drawWidth / imgAspect;
+          drawY = (canvasHeight - drawHeight) / 2;
+        } else {
+          drawHeight = canvasHeight;
+          drawWidth = drawHeight * imgAspect;
+          drawX = (canvasWidth - drawWidth) / 2;
+        }
       } else {
-        drawHeight = canvasHeight;
-        drawWidth = drawHeight * imgAspect;
-        drawX = (canvasWidth - drawWidth) / 2;
+        // imageFit === 'cover' or default
+        if (imgAspect < canvasAspect) {
+          drawWidth = canvasWidth;
+          drawHeight = drawWidth / imgAspect;
+          drawY = (canvasHeight - drawHeight) / 2;
+        } else {
+          drawHeight = canvasHeight;
+          drawWidth = drawHeight * imgAspect;
+          drawX = (canvasWidth - drawWidth) / 2;
+        }
       }
-      // Apply pan/zoom (keeping it simple for now - centered zoom)
-      ctx.translate(canvasWidth / 2, canvasHeight / 2);
-      ctx.scale(zoomState, zoomState);
-      ctx.translate(-canvasWidth / 2, -canvasHeight / 2);
-      // Pan is applied relative to the zoomed/centered view
-      ctx.translate(panOffsetState.x * dpr, panOffsetState.y * dpr);
-
       ctx.drawImage(
         img,
         0,
@@ -316,7 +295,6 @@ export default function ConfiguratorSection({ block, productContext }) {
       );
       ctx.restore();
     } else if (!isLoading) {
-      // Draw loading/error state if not loading but image unavailable
       ctx.fillStyle = "rgba(200, 200, 200, 0.8)";
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
       ctx.fillStyle = "#555";
@@ -327,6 +305,12 @@ export default function ConfiguratorSection({ block, productContext }) {
           ? `Image ${displayFrameIndex} Error`
           : `Image ${displayFrameIndex} Loading...`;
       ctx.fillText(statusText, canvasWidth / 2, canvasHeight / 2);
+      if (
+        imageLoadingStatusRef.current[displayFrameIndex] !== "loaded" &&
+        imageLoadingStatusRef.current[displayFrameIndex] !== "loading"
+      ) {
+        loadImage(displayFrameIndex); // Attempt to load if missing
+      }
     }
   }, [
     canvasSize,
@@ -334,118 +318,100 @@ export default function ConfiguratorSection({ block, productContext }) {
     currentVisualFrame,
     frameCount,
     imageFit,
-    zoomState,
-    panOffsetState,
     isLoading,
-  ]); // Removed log
+    loadImage,
+  ]);
 
-  // --- Interaction Logic Callbacks ---
   const stopAutoRotate = useCallback(() => {
     if (gsapAnimationRef.current) {
       gsapAnimationRef.current.kill();
       gsapAnimationRef.current = null;
       log("Stopped GSAP auto-rotate");
     }
-    setIsInteracting(false); // Ensure interaction state is reset
+    setIsInteracting(false);
   }, [log]);
 
-  const startAutoRotate = useCallback(() => {
-    // Prevent starting if already rotating, loading, interacting, or zoomed
-    if (
-      !autoRotate ||
-      gsapAnimationRef.current ||
-      isLoading ||
-      isInteracting ||
-      zoomState > minZoom
-    ) {
+  const startAutoRotate = useCallback(
+    contextSafe(() => {
+      if (
+        !autoRotate ||
+        gsapAnimationRef.current ||
+        isLoading ||
+        isInteracting
+      ) {
+        stopAutoRotate();
+        return;
+      }
+      log("Starting GSAP auto-rotate");
       stopAutoRotate();
-      return;
-    }
-    log("Starting GSAP auto-rotate");
-    stopAutoRotate(); // Ensure previous is stopped
 
-    const frameStep = autoRotateDirection === "clockwise" ? 1 : -1;
-    // Calculate speed relative to frame count
-    const rotationSpeedFactor = Math.max(0.1, autoRotateSpeed);
-    const durationPerRevolution = frameCount / (rotationSpeedFactor * 10); // Adjust multiplier for speed feel
+      const frameStep = autoRotateDirection === "clockwise" ? 1 : -1;
+      const rotationSpeedFactor = Math.max(0.1, autoRotateSpeed);
+      const durationPerRevolution = frameCount / (rotationSpeedFactor * 10);
 
-    gsapAnimationRef.current = gsap.to(targetFrameRef, {
-      current: `+=${frameStep * frameCount}`, // Rotate a full circle
-      duration: durationPerRevolution,
-      ease: "none",
-      repeat: -1,
-      overwrite: true,
-      onUpdate: contextSafe(() => {
-        // Use contextSafe for updates within GSAP callback
-        if (!isMountedRef.current) return; // Check mount status
-
-        const visualFrame =
-          (Math.round(targetFrameRef.current % frameCount) + frameCount) %
-          frameCount;
-        // Check if the visual frame actually needs changing AND image is loaded
-        if (
-          visualFrame !== currentVisualFrame &&
-          imageLoadingStatusRef.current[visualFrame] === "loaded"
-        ) {
-          setCurrentVisualFrame(visualFrame); // Update React state
-          preloadNeighbors(visualFrame);
-        } else if (
-          imageLoadingStatusRef.current[visualFrame] !== "loaded" &&
-          imageLoadingStatusRef.current[visualFrame] !== "loading"
-        ) {
-          // If not loaded, attempt to load it
-          loadImage(visualFrame);
-          preloadNeighbors(visualFrame);
-        }
-        // Draw is handled by the state update effect
-      }),
-      onInterrupt: () => {
-        log("GSAP Auto-rotate interrupted");
-        gsapAnimationRef.current = null; // Clear the ref on interrupt
-        // Don't set isInteracting false here, the interrupting action will handle it
-      },
-      onComplete: () => {
-        // Should not be reached with repeat -1
-        gsapAnimationRef.current = null;
-        setIsInteracting(false);
-      },
-    });
-  }, [
-    autoRotate,
-    isLoading,
-    isInteracting,
-    zoomState,
-    minZoom,
-    autoRotateDirection,
-    autoRotateSpeed,
-    frameCount,
-    stopAutoRotate,
-    log,
-    currentVisualFrame,
-    loadImage,
-    preloadNeighbors,
-    contextSafe,
-  ]);
+      gsapAnimationRef.current = gsap.to(targetFrameRef, {
+        current: `+=${frameStep * frameCount}`,
+        duration: durationPerRevolution,
+        ease: "none",
+        repeat: -1,
+        overwrite: true,
+        onUpdate: () => {
+          if (!isMountedRef.current) return;
+          const visualFrame =
+            (Math.round(targetFrameRef.current % frameCount) + frameCount) %
+            frameCount;
+          if (
+            visualFrame !== currentVisualFrame &&
+            imageLoadingStatusRef.current[visualFrame] === "loaded"
+          ) {
+            setCurrentVisualFrame(visualFrame);
+            preloadNeighbors(visualFrame);
+          } else if (
+            imageLoadingStatusRef.current[visualFrame] !== "loaded" &&
+            imageLoadingStatusRef.current[visualFrame] !== "loading"
+          ) {
+            loadImage(visualFrame);
+          }
+        },
+        onInterrupt: () => {
+          log("GSAP Auto-rotate interrupted");
+          gsapAnimationRef.current = null;
+        },
+        onComplete: () => {
+          gsapAnimationRef.current = null;
+          if (isMountedRef.current) setIsInteracting(false);
+        },
+      });
+    }),
+    [
+      autoRotate,
+      isLoading,
+      isInteracting,
+      frameCount,
+      autoRotateDirection,
+      autoRotateSpeed,
+      stopAutoRotate,
+      log,
+      currentVisualFrame,
+      loadImage,
+      preloadNeighbors,
+    ]
+  );
 
   const resetView = useCallback(() => {
     log("Resetting view");
-    stopAutoRotate(); // Kills GSAP tween too
-
+    stopAutoRotate();
     const initialVisual =
-      (Math.round(initialFrame % frameCount) + frameCount) % frameCount;
-    targetFrameRef.current = initialFrame;
+      (Math.round((initialFrameOverride ?? 0) % frameCount) + frameCount) %
+      frameCount;
+    targetFrameRef.current = initialFrameOverride ?? 0;
     setCurrentVisualFrame(initialVisual);
-    setZoomState(minZoom);
-    setPanOffsetState({ x: 0, y: 0 });
     setIsInteracting(false);
-
     requestAnimationFrame(drawCanvas);
-    if (autoRotate && !isLoading && minZoom === 1)
-      setTimeout(startAutoRotate, 100);
+    if (autoRotate && !isLoading) setTimeout(startAutoRotate, 100);
   }, [
-    initialFrame,
+    initialFrameOverride,
     frameCount,
-    minZoom,
     autoRotate,
     log,
     stopAutoRotate,
@@ -454,37 +420,27 @@ export default function ConfiguratorSection({ block, productContext }) {
     isLoading,
   ]);
 
-  // --- Gesture Binding (using useDrag) ---
   const bindGestures = useDrag(
     contextSafe(
       ({ event, first, last, movement: [mx], velocity: [vx], memo }) => {
-        // contextSafe ensures GSAP/React state updates inside are safe
-        // event.preventDefault(); // Prevent default only if necessary, might block scroll sometimes
-
-        if (isLoading || !canvasRef.current) return;
-
+        if (isLoading || !canvasRef.current || frameCount <= 0) return;
         if (first) {
-          stopAutoRotate(); // Stop rotation on drag start
+          stopAutoRotate();
           setIsInteracting(true);
-          memo = targetFrameRef.current; // Store initial precise frame
+          memo = targetFrameRef.current;
           log("Drag Start");
         }
-
-        // Calculate new target frame based on drag movement
         const sensitivityFactor = Math.max(
           1,
           canvasSize.width > 0 ? canvasSize.width / 10 : 50
         );
         const frameDelta =
           (mx / sensitivityFactor) * dragSensitivity * frameCount;
-        const newTargetFrame = memo - frameDelta; // Calculate based on initial + movement
-
-        // Update precise frame continuously
+        const newTargetFrame = memo - frameDelta;
         targetFrameRef.current = newTargetFrame;
-
-        // Update visual frame immediately during drag (if loaded)
         const newVisualFrame =
           (Math.round(newTargetFrame % frameCount) + frameCount) % frameCount;
+
         if (newVisualFrame !== currentVisualFrame) {
           if (
             imageLoadingStatusRef.current[newVisualFrame] !== "loaded" &&
@@ -493,38 +449,24 @@ export default function ConfiguratorSection({ block, productContext }) {
             loadImage(newVisualFrame);
           }
           if (imageLoadingStatusRef.current[newVisualFrame] === "loaded") {
-            setCurrentVisualFrame(newVisualFrame); // Update visual state
+            setCurrentVisualFrame(newVisualFrame);
           }
           preloadNeighbors(newVisualFrame);
         }
-        requestAnimationFrame(drawCanvas); // Ensure canvas redraws during drag
+        requestAnimationFrame(drawCanvas);
 
         if (last) {
-          // Drag ended
           log("Drag End - Initiating GSAP Inertia", { velocity: vx });
-          // Kill any existing inertia tween before starting a new one
           if (gsapAnimationRef.current) gsapAnimationRef.current.kill();
-
-          // Map drag velocity (vx, pixels/ms from use-gesture) to GSAP's expected frame velocity
-          // This requires tuning: velocity sign might need flipping, magnitude needs scaling
-          const inertiaVelocity = -vx * dragSensitivity * 25; // ** EXPERIMENT with this multiplier **
-
+          const inertiaVelocity = -vx * dragSensitivity * 25;
           gsapAnimationRef.current = gsap.to(targetFrameRef, {
-            current: targetFrameRef.current, // Start from the ref's current value
-            duration: 2.5, // Max duration of inertia (GSAP will stop sooner if velocity decays)
-            ease: "power1.out", // A standard deceleration ease
-            inertia: {
-              current: {
-                // Target the 'current' property of the ref
-                velocity: inertiaVelocity,
-                // Adjust resistance if needed (higher = stops faster)
-                // resistance: 300
-              },
-            },
+            current: targetFrameRef.current,
+            duration: 2.5,
+            ease: "power1.out",
+            inertia: { current: { velocity: inertiaVelocity } },
             onUpdate: () => {
-              // Must use contextSafe here too if it wasn't global
               if (!isMountedRef.current) return;
-              setIsInteracting(true); // Ensure interacting during inertia
+              setIsInteracting(true);
               const visualFrame =
                 (Math.round(targetFrameRef.current % frameCount) + frameCount) %
                 frameCount;
@@ -538,20 +480,19 @@ export default function ConfiguratorSection({ block, productContext }) {
                 imageLoadingStatusRef.current[visualFrame] !== "loaded" &&
                 imageLoadingStatusRef.current[visualFrame] !== "loading"
               ) {
-                loadImage(visualFrame); // Keep trying to load during inertia
+                loadImage(visualFrame);
               }
-              requestAnimationFrame(drawCanvas); // Redraw on each update
+              requestAnimationFrame(drawCanvas);
             },
             onComplete: () => {
               log("GSAP Inertia Complete");
               if (isMountedRef.current) setIsInteracting(false);
               gsapAnimationRef.current = null;
-              if (autoRotate && !isLoading && zoomState <= minZoom)
-                startAutoRotate();
+              if (autoRotate && !isLoading) startAutoRotate();
             },
             onInterrupt: () => {
               log("GSAP Inertia Interrupted");
-              if (isMountedRef.current) setIsInteracting(true); // Assume interrupted by new interaction
+              if (isMountedRef.current) setIsInteracting(true);
               gsapAnimationRef.current = null;
             },
           });
@@ -559,36 +500,30 @@ export default function ConfiguratorSection({ block, productContext }) {
         return memo;
       }
     ),
-    {
-      target: containerRef,
-      axis: "x",
-      filterTaps: true,
-      preventDefault: true, // Prevent default to avoid image ghosting/selection
-      // threshold: 5, // Optional drag threshold
-    }
+    { target: containerRef, axis: "x", filterTaps: true, preventDefault: true }
   );
 
-  // --- Keyboard handler (Callback) ---
   const handleKeyDown = useCallback(
     (e) => {
       if (isLoading || frameCount === 0) return;
       let frameChange = 0;
       if (e.key === "ArrowLeft") frameChange = -1;
       else if (e.key === "ArrowRight") frameChange = 1;
-      else if (e.key === "Home") frameChange = -targetFrameRef.current;
+      // Home and End keys can be tricky with precise frame counts, adjust if needed
+      else if (e.key === "Home")
+        frameChange = -Math.round(targetFrameRef.current % frameCount);
       else if (e.key === "End")
-        frameChange = frameCount - 1 - targetFrameRef.current;
+        frameChange =
+          frameCount - 1 - Math.round(targetFrameRef.current % frameCount);
 
       if (frameChange !== 0) {
         e.preventDefault();
-        stopAutoRotate(); // Stops GSAP rotation too
-        setIsInteracting(false); // Ensure interaction state is false
-
-        targetFrameRef.current += frameChange; // Update precise target
+        stopAutoRotate();
+        setIsInteracting(false);
+        targetFrameRef.current += frameChange;
         const nextVisualFrame =
           (Math.round(targetFrameRef.current % frameCount) + frameCount) %
           frameCount;
-
         if (
           imageLoadingStatusRef.current[nextVisualFrame] !== "loaded" &&
           imageLoadingStatusRef.current[nextVisualFrame] !== "loading"
@@ -596,7 +531,7 @@ export default function ConfiguratorSection({ block, productContext }) {
           loadImage(nextVisualFrame);
         }
         if (imageLoadingStatusRef.current[nextVisualFrame] === "loaded") {
-          setCurrentVisualFrame(nextVisualFrame); // Update visual state
+          setCurrentVisualFrame(nextVisualFrame);
         }
         preloadNeighbors(nextVisualFrame);
         log("Keyboard Interaction", {
@@ -605,9 +540,7 @@ export default function ConfiguratorSection({ block, productContext }) {
           visual: nextVisualFrame,
         });
         requestAnimationFrame(drawCanvas);
-        // Restart auto-rotate after a delay
-        if (autoRotate && zoomState <= minZoom && !isLoading)
-          setTimeout(startAutoRotate, 150);
+        if (autoRotate && !isLoading) setTimeout(startAutoRotate, 150);
       } else if (e.key === "r" || e.key === "R") {
         e.preventDefault();
         resetView();
@@ -622,46 +555,35 @@ export default function ConfiguratorSection({ block, productContext }) {
       log,
       drawCanvas,
       autoRotate,
-      zoomState,
-      minZoom,
       startAutoRotate,
       resetView,
       currentVisualFrame,
     ]
   );
 
-  // --- Cursor Handlers (Callbacks) ---
   const handleMouseMoveForCursor = useCallback(
     (e) => {
       if (useCustomCursor && containerRef.current && customCursorRef.current) {
         const r = containerRef.current.getBoundingClientRect();
-        const x = e.clientX - r.left;
-        const y = e.clientY - r.top;
-        customCursorRef.current.style.transform = `translate(${x}px, ${y}px) translateZ(0)`;
+        customCursorRef.current.style.transform = `translate(${
+          e.clientX - r.left
+        }px, ${e.clientY - r.top}px) translateZ(0)`;
       }
     },
     [useCustomCursor]
   );
-
   const handleMouseEnter = useCallback(() => {
     if (useCustomCursor && !isLoading) setIsCursorVisible(true);
   }, [useCustomCursor, isLoading]);
-
   const handleMouseLeave = useCallback(() => {
     if (useCustomCursor) setIsCursorVisible(false);
-    // We use the `bindGestures` `last` property now, so less need for this,
-    // but keep it as a safety net if mouse leaves window unexpectedly mid-drag.
-    // Consider if needed based on testing.
-    // if (interactionStateRef.current.isDragging) {
-    //     handleInteractionEnd();
-    // }
-  }, [useCustomCursor /*, handleInteractionEnd */]);
+  }, [useCustomCursor]);
 
   // --- Effects ---
   useEffect(() => {
     isMountedRef.current = true;
     log("Component Mounted");
-    setDevicePixelRatioState(window.devicePixelRatio || 1); // Initial DPR
+    setDevicePixelRatioState(window.devicePixelRatio || 1);
     return () => {
       isMountedRef.current = false;
       log("Component Unmounting");
@@ -669,53 +591,61 @@ export default function ConfiguratorSection({ block, productContext }) {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       if (gsapAnimationRef.current) gsapAnimationRef.current.kill();
     };
-  }, [log, stopAutoRotate]); // Include stable callbacks
+  }, [log, stopAutoRotate]);
 
   useEffect(() => {
-    // Image Loading Trigger Effect
     if (
-      !modelSlug ||
+      !modelCode ||
       !currentColorSlug ||
       !currentSizeLabel ||
       frameCount <= 0
     ) {
       setIsLoading(true);
-      setLoadingError("Missing model, color, size, or frameCount.");
+      const errorContextId =
+        productContext?.id || block?._key || "current item";
+      setLoadingError(
+        `Configurator Error: Missing essential data (modelCode, colorSlug, sizeLabel, or frameCount). Product/Block ID: ${errorContextId}. Please check Sanity data. modelCode: ${modelCode}, currentColorSlug: ${currentColorSlug}, currentSizeLabel: ${currentSizeLabel}, frameCount: ${frameCount}`
+      );
       return;
     }
     log(
-      `Load Trigger: ${modelSlug}, ${currentColorSlug}, ${currentSizeLabel}, ${frameCount}`
+      `Load Trigger: ${modelCode}, ${currentColorSlug}, ${currentSizeLabel}, ${frameCount}`
     );
-
     setIsLoading(true);
     setLoadingProgress(0);
     setLoadingError(null);
     imageElementsRef.current = new Array(frameCount).fill(null);
     imageLoadingStatusRef.current = {};
-
     const urls = generateImageUrls(
       frameCount,
       currentSizeLabel,
-      modelSlug,
+      modelCode,
       currentColorSlug
     );
     imageUrlsRef.current = urls;
 
-    if (urls.length === 0) {
-      setLoadingError("Generated 0 image URLs.");
+    if (urls.length === 0 || urls.length !== frameCount) {
+      setLoadingError(
+        `Generated ${urls.length} image URLs, but expected ${frameCount}. Check modelCode ('${modelCode}'), colorSlug ('${currentColorSlug}'), and image storage.`
+      );
       setIsLoading(false);
       return;
     }
 
+    const effectiveInitialFrame = initialFrameOverride ?? 0;
     const initialVisualFrame =
-      (Math.round(initialFrame % frameCount) + frameCount) % frameCount;
-    targetFrameRef.current = initialFrame;
+      (Math.round(effectiveInitialFrame % frameCount) + frameCount) %
+      frameCount;
+    targetFrameRef.current = effectiveInitialFrame;
     setCurrentVisualFrame(initialVisualFrame);
 
-    // Load initial batch
     const indicesToLoad = [initialVisualFrame];
     const numToLoad = Math.min(10, frameCount);
-    for (let i = 1; indicesToLoad.length < numToLoad; i++) {
+    for (
+      let i = 1;
+      indicesToLoad.length < numToLoad && i < frameCount / 2;
+      i++
+    ) {
       const nextI = (initialVisualFrame + i + frameCount) % frameCount;
       const prevI = (initialVisualFrame - i + frameCount) % frameCount;
       if (!indicesToLoad.includes(nextI)) indicesToLoad.push(nextI);
@@ -725,7 +655,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     log("Loading initial batch:", indicesToLoad);
     indicesToLoad.forEach(loadImage);
 
-    // Start Timeout
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     loadingTimeoutRef.current = setTimeout(() => {
       if (isMountedRef.current && isLoading) {
@@ -734,41 +663,39 @@ export default function ConfiguratorSection({ block, productContext }) {
         log("Loading Timeout!");
       }
     }, loadingTimeout);
-
     return () => {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     };
   }, [
-    modelSlug,
+    modelCode,
     currentColorSlug,
     currentSizeLabel,
     frameCount,
-    initialFrame,
+    initialFrameOverride,
     loadImage,
     log,
     loadingTimeout,
-  ]); // Re-run if these change
+    productContext?.id,
+    block?._key,
+  ]);
 
   useEffect(() => {
-    // Canvas Size Observer
     const cont = containerRef.current;
     const observer = new ResizeObserver(() => {
-      if (cont && isMountedRef.current) {
+      if (cont && isMountedRef.current)
         setCanvasSize({ width: cont.clientWidth, height: cont.clientHeight });
-      }
     });
     if (cont) {
-      setCanvasSize({ width: cont.clientWidth, height: cont.clientHeight }); // Initial size
+      setCanvasSize({ width: cont.clientWidth, height: cont.clientHeight });
       observer.observe(cont);
     }
     return () => {
       if (cont) observer.unobserve(cont);
       observer.disconnect();
     };
-  }, []); // Run once
+  }, []);
 
   useEffect(() => {
-    // DPR Change Listener
     const updateDpr = () => {
       if (isMountedRef.current)
         setDevicePixelRatioState(window.devicePixelRatio || 1);
@@ -777,33 +704,24 @@ export default function ConfiguratorSection({ block, productContext }) {
       `(resolution: ${devicePixelRatioState}dppx)`
     );
     mediaMatcher.addEventListener("change", updateDpr);
-    updateDpr(); // Initial check
+    updateDpr();
     return () => mediaMatcher.removeEventListener("change", updateDpr);
   }, [devicePixelRatioState]);
 
   useEffect(() => {
-    // Drawing Effect - triggered by state changes
-    if (!isLoading) {
-      requestAnimationFrame(drawCanvas); // Use requestAnimationFrame for smoother rendering
-    }
+    if (!isLoading) requestAnimationFrame(drawCanvas);
   }, [
     currentVisualFrame,
-    zoomState,
-    panOffsetState,
     canvasSize,
     devicePixelRatioState,
     isLoading,
     drawCanvas,
   ]);
-
   useEffect(() => {
-    // Keyboard Listener
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
-
   useEffect(() => {
-    // Custom Cursor Listeners
     const cont = containerRef.current;
     if (useCustomCursor && cont) {
       cont.addEventListener("mouseenter", handleMouseEnter);
@@ -823,24 +741,14 @@ export default function ConfiguratorSection({ block, productContext }) {
   ]);
 
   useEffect(() => {
-    // Auto-Rotate Control Effect
-    if (autoRotate && !isLoading && !isInteracting && zoomState <= minZoom) {
+    if (autoRotate && !isLoading && !isInteracting) {
       startAutoRotate();
     } else {
       stopAutoRotate();
     }
-    // Cleanup is handled by stopAutoRotate or main unmount effect
-  }, [
-    autoRotate,
-    isLoading,
-    isInteracting,
-    zoomState,
-    minZoom,
-    startAutoRotate,
-    stopAutoRotate,
-  ]);
+  }, [autoRotate, isLoading, isInteracting, startAutoRotate, stopAutoRotate]);
 
-  // --- Styles (Memoized) ---
+  // --- Styles (Memoized or Inline) ---
   const containerComputedStyle = useMemo(
     () => ({
       position: "relative",
@@ -879,49 +787,53 @@ export default function ConfiguratorSection({ block, productContext }) {
     [isLoading, loadingProgress]
   );
 
-  const loadingOverlayStyle = useMemo(
-    () => ({
-      /* ... as before ... */
-    }),
-    [isLoading]
-  );
-  const progressTextStyle = useMemo(
-    () => ({
-      /* ... as before ... */
-    }),
-    []
-  );
-  const progressBarContainerStyle = useMemo(
-    () => ({
-      /* ... as before ... */
-    }),
-    []
-  );
-  const progressBarStyle = useMemo(
-    () => ({
-      /* ... as before ... */
-    }),
-    [loadingProgress]
-  );
-  const errorOverlayStyle = useMemo(
-    () => ({
-      /* ... as before ... */
-    }),
-    []
-  );
-  const customCursorComputedStyle = useMemo(
-    () => ({
-      /* ... as before ... */
-    }),
-    [cursorSize, cursorBgColor, cursorTextColor, cursorFont, isCursorVisible]
-  );
+  const sectionTitleText = blockSectionTitle || "360° View";
+  const sectionSubtitleText =
+    blockSectionSubtitle || "Drag to explore the vehicle";
 
-  // --- Render ---
-  const sectionTitleText = sectionTitleOverride || "Vehicle Overview";
-  const sectionSubtitleText = sectionSubtitleOverride || "Drag to Interact";
+  // --- Color Selector UI (Example) ---
+  const renderColorSelector = () => {
+    if (!colorsFromBlock || colorsFromBlock.length <= 1) return null;
+    return (
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex space-x-2 p-2 bg-neutral-800/70 dark:bg-black/70 backdrop-blur-sm rounded-full shadow-lg">
+        {colorsFromBlock.map((color) => (
+          <button
+            key={color._key || color.slug}
+            title={color.name || color.slug}
+            onClick={() => {
+              if (color.slug && color.slug !== currentColorSlug) {
+                log(`Color changed to: ${color.slug}`);
+                setCurrentColorSlug(color.slug);
+                // Reset frame to initial or 0 when color changes
+                targetFrameRef.current = initialFrameOverride ?? 0;
+                setCurrentVisualFrame(
+                  (Math.round(targetFrameRef.current % frameCount) +
+                    frameCount) %
+                    frameCount
+                );
+                // Image loading will be triggered by useEffect watching currentColorSlug
+              }
+            }}
+            className={cn(
+              "w-8 h-8 rounded-full border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-neutral-800",
+              currentColorSlug === color.slug
+                ? "border-white ring-2 ring-primary"
+                : "border-transparent hover:border-neutral-400"
+            )}
+            style={{ backgroundColor: color.colorValue || "#ccc" }} // Use resolved hex color
+            aria-label={`Select color ${color.name || color.slug}`}
+            aria-pressed={currentColorSlug === color.slug}
+          >
+            {/* Optional: Inner contrasting dot for visibility */}
+            {/* {currentColorSlug === color.slug && <span className="block w-2 h-2 rounded-full bg-white/70 m-auto"></span>} */}
+          </button>
+        ))}
+      </div>
+    );
+  };
 
-  // Add a check for essential data needed to render the turntable
-  if (!modelSlug || !initialColorSlug || frameCount <= 0) {
+  if (!modelCode || !initialColorSlug || frameCount <= 0) {
+    const errorContextId = productContext?.id || block?._key || "current item";
     return (
       <section
         className={cn(
@@ -930,13 +842,23 @@ export default function ConfiguratorSection({ block, productContext }) {
         )}
       >
         <div className="container mx-auto px-4 h-[60vh] flex items-center justify-center text-center">
-          <p className="text-destructive font-semibold">
-            Configurator cannot be displayed. <br />
-            Missing essential vehicle data (model, color, or frame count).{" "}
-            <br />
-            Please check Sanity configuration for Product ID:{" "}
-            {productContext?.id}
-          </p>
+          <div>
+            <p className="text-destructive font-semibold text-lg mb-2">
+              Configurator Error
+            </p>
+            <p className="text-muted-foreground">
+              Cannot display the 360° view for "
+              {productContext?.title || "this product"}".
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Missing essential configuration data. Please verify settings in
+              Sanity for product/block ID: {errorContextId}.<br />
+              Needed: Model Code, Initial Color Slug, Frame Count.
+              <br />
+              Current: MC: '{modelCode || "N/A"}', ICS: '
+              {initialColorSlug || "N/A"}', FC: '{frameCount || "N/A"}'
+            </p>
+          </div>
         </div>
       </section>
     );
@@ -945,49 +867,53 @@ export default function ConfiguratorSection({ block, productContext }) {
   return (
     <section
       className={cn(
-        "relative py-16 md:py-24 bg-gray-100 dark:bg-neutral-900 text-foreground",
+        "relative py-12 md:py-20 bg-neutral-100 dark:bg-neutral-900 text-foreground overflow-hidden",
         className
       )}
     >
       {(sectionTitleText || sectionSubtitleText) && (
-        <div className="absolute inset-x-0 top-16 md:top-24 z-10 pointer-events-none">
-          <div className="container mx-auto px-4">
-            <div className="text-center max-w-2xl mx-auto">
-              {sectionTitleText && (
-                <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-2 text-foreground">
-                  {sectionTitleText}
-                </h2>
-              )}
-              {sectionSubtitleText && (
-                <p className="text-lg md:text-xl text-muted-foreground">
-                  {sectionSubtitleText}
-                </p>
-              )}
-            </div>
-          </div>
+        <div className="container mx-auto px-4 text-center mb-8 md:mb-12">
+          {sectionTitleText && (
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight mb-2">
+              {sectionTitleText}
+            </h2>
+          )}
+          {sectionSubtitleText && (
+            <p className="text-md md:text-lg text-muted-foreground max-w-xl mx-auto">
+              {sectionSubtitleText}
+            </p>
+          )}
         </div>
       )}
 
       <div
         ref={containerRef}
         style={containerComputedStyle}
-        className="w-full h-[60vh] md:h-[80vh] lg:h-[70vh] min-h-[400px] md:min-h-[500px] relative" // Use Tailwind for sizing
-        {...bindGestures()} // Spread gesture handlers
+        className="w-full h-[50vh] sm:h-[60vh] md:h-[75vh] lg:h-[80vh] xl:h-[calc(100vh-200px)] max-h-[800px] min-h-[350px] md:min-h-[450px] relative mx-auto" // Sizing classes
+        {...bindGestures()}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onMouseMove={useCustomCursor ? handleMouseMoveForCursor : undefined}
-        // Add wheel handler if needed: onWheel={allowZoom && !isLoading ? handleWheel : undefined}
         role="img"
         aria-label="3D Turntable Viewer"
         aria-busy={isLoading}
-        tabIndex={0} // Make focusable
+        tabIndex={0}
       >
         <canvas ref={canvasRef} style={canvasComputedStyle} />
 
         {useCustomCursor && (
           <motion.div
             ref={customCursorRef}
-            style={customCursorComputedStyle}
+            className="fixed top-0 left-0 pointer-events-none z-50 rounded-full flex items-center justify-center text-xs font-semibold"
+            style={{
+              width: cursorSize,
+              height: cursorSize,
+              backgroundColor: cursorBgColor,
+              color: cursorTextColor,
+              font: cursorFont,
+              translateX: "-50%",
+              translateY: "-50%", // Center cursor on mouse
+            }}
             initial={{ scale: 0, opacity: 0 }}
             animate={{
               scale: isCursorVisible ? 1 : 0,
@@ -1003,24 +929,23 @@ export default function ConfiguratorSection({ block, productContext }) {
           {isLoading && (
             <motion.div
               key="loader"
-              style={loadingOverlayStyle}
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-neutral-100/80 dark:bg-neutral-900/80"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <div style={progressTextStyle}>Loading {loadingProgress}%</div>
-              <div style={progressBarContainerStyle}>
-                <div style={progressBarStyle}></div>
+              <div className="text-sm font-medium text-muted-foreground mb-2">
+                Loading {loadingProgress}%
+              </div>
+              <div className="w-40 h-2 bg-neutral-300 dark:bg-neutral-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${loadingProgress}%` }}
+                />
               </div>
               {loadingError && (
-                <p
-                  style={{
-                    color: "#cc0000",
-                    marginTop: "10px",
-                    fontSize: "12px",
-                  }}
-                >
+                <p className="text-destructive text-xs mt-3 text-center px-4">
                   {loadingError}
                 </p>
               )}
@@ -1029,56 +954,48 @@ export default function ConfiguratorSection({ block, productContext }) {
         </AnimatePresence>
 
         {!isLoading && loadingError && (
-          <div style={errorOverlayStyle}>
-            <p>{loadingError}</p>
+          // Show persistent error if loading finished but errors occurred (e.g., some images failed)
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-destructive/10 p-4 text-center">
+            <p className="text-destructive-foreground font-medium">
+              Display issues encountered
+            </p>
+            <p className="text-destructive-foreground/80 text-sm">
+              {loadingError}
+            </p>
           </div>
         )}
+        {renderColorSelector()}
       </div>
     </section>
   );
 }
 
-// --- PropTypes ---
 ConfiguratorSection.propTypes = {
   block: PropTypes.shape({
-    // Optional override fields from the Sanity block
-    sectionTitleOverride: PropTypes.string,
-    sectionSubtitleOverride: PropTypes.string,
+    modelCode: PropTypes.string.isRequired,
+    frameCount: PropTypes.number, // Not strictly required if default used
+    colors: PropTypes.arrayOf(
+      PropTypes.shape({
+        _key: PropTypes.string,
+        name: PropTypes.string,
+        slug: PropTypes.string.isRequired,
+        colorValue: PropTypes.string,
+        isDefault: PropTypes.bool,
+      })
+    ),
+    sectionTitle: PropTypes.string,
+    sectionSubtitle: PropTypes.string,
     initialFrameOverride: PropTypes.number,
     autoRotateOverride: PropTypes.bool,
-    backgroundColor: PropTypes.string,
-    imageFit: PropTypes.oneOf(["contain", "fill"]),
-    dragSensitivity: PropTypes.number,
-    allowZoom: PropTypes.bool,
-    minZoom: PropTypes.number,
-    maxZoom: PropTypes.number,
-    zoomSensitivity: PropTypes.number,
-    resetDoubleClickDelay: PropTypes.number,
-    autoRotate: PropTypes.bool,
-    autoRotateSpeed: PropTypes.number,
-    autoRotateDirection: PropTypes.oneOf(["clockwise", "counterclockwise"]),
-    loadingTimeout: PropTypes.number,
-    useCustomCursor: PropTypes.bool,
-    cursorSize: PropTypes.number,
-    cursorBgColor: PropTypes.string,
-    cursorTextColor: PropTypes.string,
-    cursorText: PropTypes.string,
-    cursorFont: PropTypes.string,
-    debugMode: PropTypes.bool,
-    className: PropTypes.string, // Allow passing className
+    autoRotate: PropTypes.bool, // Added to block schema
+    // ... other props
     _key: PropTypes.string.isRequired,
     _type: PropTypes.string.isRequired,
-  }), // Block itself can be optional if defaults are sufficient
-  productContext: PropTypes.shape({
-    relatedVehicle: PropTypes.shape({
-      slug: PropTypes.string, // Expecting model slug (e.g., "km3000")
-      colors: PropTypes.arrayOf(
-        PropTypes.shape({
-          name: PropTypes.string, // e.g., "Glossy Red"
-          isDefault: PropTypes.bool,
-        })
-      ),
-      frameCount: PropTypes.number, // ** Required **
-    }),
+    className: PropTypes.string,
   }).isRequired,
+  productContext: PropTypes.shape({
+    id: PropTypes.string,
+    title: PropTypes.string,
+    slug: PropTypes.string,
+  }),
 };
