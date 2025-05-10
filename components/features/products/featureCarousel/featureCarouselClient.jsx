@@ -11,21 +11,114 @@ import React, {
 import PropTypes from "prop-types";
 import useEmblaCarousel from "embla-carousel-react";
 import { WheelGesturesPlugin } from "embla-carousel-wheel-gestures";
-import { Leva, useControls, folder } from "leva";
+
+let LevaComponent = () => null;
+let useControlsHook = (name, schema, options) => {
+  const defaults = { showLevaControls: false }; // Default showLevaControls to false for production
+  if (schema) {
+    for (const key in schema) {
+      if (key === "Layout" || key === "EmblaOptions" || key === "Performance") {
+        defaults[key] = {};
+        if (schema[key] && typeof schema[key] === "object") {
+          for (const subKey in schema[key]) {
+            if (
+              typeof schema[key][subKey] === "object" &&
+              "value" in schema[key][subKey]
+            ) {
+              defaults[key][subKey] = schema[key][subKey].value;
+            }
+          }
+        }
+      } else if (typeof schema[key] === "object" && "value" in schema[key]) {
+        defaults[key] = schema[key].value;
+      }
+    }
+  }
+  // Explicitly set defaults for all expected controls based on EMBLA_DEFAULTS_PROD
+  defaults.levaCardMaxWidth =
+    schema?.Layout?.levaCardMaxWidth?.value ?? EMBLA_DEFAULTS_PROD.cardMaxWidth;
+  defaults.levaSlideGap =
+    schema?.Layout?.levaSlideGap?.value ?? EMBLA_DEFAULTS_PROD.slideGap;
+  defaults.levaViewportPadding =
+    schema?.Layout?.levaViewportPadding?.value ??
+    EMBLA_DEFAULTS_PROD.viewportPadding; // Using single padding
+  defaults.levaAlign =
+    schema?.EmblaOptions?.levaAlign?.value ?? EMBLA_DEFAULTS_PROD.align;
+  defaults.levaSlidesToScroll =
+    schema?.EmblaOptions?.levaSlidesToScroll?.value ??
+    EMBLA_DEFAULTS_PROD.slidesToScroll.toString();
+  defaults.levaContainScroll =
+    schema?.EmblaOptions?.levaContainScroll?.value ??
+    (EMBLA_DEFAULTS_PROD.containScroll === null
+      ? "null"
+      : EMBLA_DEFAULTS_PROD.containScroll);
+  defaults.levaImagePreloadMargin =
+    schema?.Performance?.levaImagePreloadMargin?.value ??
+    EMBLA_DEFAULTS_PROD.imagePreloadMargin;
+  defaults.levaWheelPluginSpeed =
+    schema?.Performance?.levaWheelPluginSpeed?.value ??
+    EMBLA_DEFAULTS_PROD.wheelPluginSpeed;
+
+  if (
+    schema &&
+    schema.showLevaControls &&
+    typeof schema.showLevaControls.value === "boolean"
+  ) {
+    defaults.showLevaControls = schema.showLevaControls.value;
+  }
+  return defaults;
+};
+let folderHook = (schema, options) => schema;
+
+if (process.env.NODE_ENV === "development") {
+  try {
+    const leva = require("leva");
+    LevaComponent = leva.Leva;
+    useControlsHook = leva.useControls;
+    folderHook = leva.folder;
+  } catch (error) {
+    console.warn("Leva could not be loaded for FeatureCarouselClient.", error);
+  }
+}
+
 import { cn } from "@/lib/utils";
 import FeatureSlideItem from "./featureSlideItem";
 import FeatureSlideDetailModal from "./featureSlideDetailModal";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import Plus from "lucide-react/dist/esm/icons/plus";
 import { Button } from "@/components/ui/button";
 
-/** @typedef {import('./featureCarouselBlock').FeatureSlideData} FeatureSlideData */
+/** @typedef {import('./featureCarouselBlock').FeatureSlideDataSanity} SlideData */
 
-// Defaults based on your last request/screenshot
-const EMBLA_DEFAULTS = {
-  cardWidth: 480,
+function useModalState() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSlideDataForModal, setSelectedSlideDataForModal] =
+    useState(null);
+  const openModalWithSlide = useCallback((slideData) => {
+    if (slideData && slideData.enablePopup) {
+      setSelectedSlideDataForModal(slideData);
+      setIsModalOpen(true);
+    }
+  }, []);
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
+    // Consider delaying nullification for exit animations if modal content unmounts abruptly
+    // setTimeout(() => setSelectedSlideDataForModal(null), 300); // Example
+  }, []);
+  return {
+    isModalOpen,
+    selectedSlideDataForModal,
+    openModalWithSlide,
+    closeModal,
+  };
+}
+
+const EMBLA_DEFAULTS_PROD = {
+  cardMaxWidth: 480,
   slideGap: 20,
-  viewportPaddingStart: 60,
-  viewportPaddingEnd: 60,
+  viewportPadding: 16, // Mobile default horizontal padding
+  viewportPaddingDesktop: 64, // Desktop default horizontal padding
   align: "start",
   slidesToScroll: 1,
   containScroll: null,
@@ -34,131 +127,144 @@ const EMBLA_DEFAULTS = {
 };
 
 export default function FeatureCarouselClient({ slides, productContext }) {
-  const {
-    showLevaControls,
-    levaCardWidth,
-    levaSlideGap,
-    levaViewportPaddingStart,
-    levaViewportPaddingEnd,
-    levaAlign,
-    levaSlidesToScroll,
-    levaContainScroll,
-    levaImagePreloadMargin,
-    levaWheelPluginSpeed,
-  } = useControls(
-    "Feature Carousel UI",
-    {
-      showLevaControls: {
-        value: process.env.NODE_ENV === "development",
-        label: "Show Dev Controls",
-      },
-      Layout: folder(
-        {
-          levaCardWidth: {
-            value: EMBLA_DEFAULTS.cardWidth,
-            min: 200,
-            max: 800,
-            step: 10,
-            label: "Card Width (px)",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-          levaSlideGap: {
-            value: EMBLA_DEFAULTS.slideGap,
-            min: 0,
-            max: 80,
-            step: 2,
-            label: "Slide Gap (px)",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-          levaViewportPaddingStart: {
-            value: EMBLA_DEFAULTS.viewportPaddingStart,
-            min: 0,
-            max: 200,
-            step: 5,
-            label: "Viewport Padding Start (px)",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-          levaViewportPaddingEnd: {
-            value: EMBLA_DEFAULTS.viewportPaddingEnd,
-            min: 0,
-            max: 200,
-            step: 5,
-            label: "Viewport Padding End (px)",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-        },
-        { render: (get) => get("Feature Carousel UI.showLevaControls") }
-      ),
-      EmblaOptions: folder(
-        {
-          levaAlign: {
-            value: EMBLA_DEFAULTS.align,
-            options: ["start", "center", "end"],
-            label: "Align",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-          levaSlidesToScroll: {
-            value: EMBLA_DEFAULTS.slidesToScroll.toString(),
-            options: ["1", "auto"],
-            label: "Slides To Scroll (Buttons)",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-          levaContainScroll: {
-            value:
-              EMBLA_DEFAULTS.containScroll === null
-                ? "null"
-                : EMBLA_DEFAULTS.containScroll,
-            options: ["null", "trimSnaps", "keepSnaps"],
-            label: "Contain Scroll Behavior",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-        },
-        { render: (get) => get("Feature Carousel UI.showLevaControls") }
-      ),
-      Performance: folder(
-        {
-          levaImagePreloadMargin: {
-            value: EMBLA_DEFAULTS.imagePreloadMargin,
-            min: 0,
-            max: 1000,
-            step: 50,
-            label: "Image Preload Margin (px)",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-          levaWheelPluginSpeed: {
-            value: EMBLA_DEFAULTS.wheelPluginSpeed,
-            min: 0.1,
-            max: 5,
-            step: 0.1,
-            label: "Wheel Plugin Speed",
-            render: (get) => get("Feature Carousel UI.showLevaControls"),
-          },
-        },
-        { render: (get) => get("Feature Carousel UI.showLevaControls") }
-      ),
+  const levaSchema = {
+    showLevaControls: {
+      value: process.env.NODE_ENV === "development",
+      label: "Show Dev Controls",
+      transient: true,
     },
-    {
-      collapsed: process.env.NODE_ENV === "production",
-    }
+    Layout: folderHook(
+      {
+        levaCardMaxWidth: {
+          value: EMBLA_DEFAULTS_PROD.cardMaxWidth,
+          min: 200,
+          max: 800,
+          step: 10,
+          label: "Card Max Width (px)",
+        },
+        levaSlideGap: {
+          value: EMBLA_DEFAULTS_PROD.slideGap,
+          min: 0,
+          max: 80,
+          step: 2,
+          label: "Slide Gap (px)",
+        },
+        levaViewportPaddingMobile: {
+          value: EMBLA_DEFAULTS_PROD.viewportPadding,
+          min: 0,
+          max: 100,
+          step: 2,
+          label: "VP H-Pad Mobile (px)",
+        },
+        levaViewportPaddingDesktop: {
+          value: EMBLA_DEFAULTS_PROD.viewportPaddingDesktop,
+          min: 0,
+          max: 200,
+          step: 4,
+          label: "VP H-Pad Desktop (px)",
+        },
+      },
+      { render: (get) => get("Feature Carousel UI.showLevaControls") === true }
+    ),
+    EmblaOptions: folderHook(
+      {
+        levaAlign: {
+          value: EMBLA_DEFAULTS_PROD.align,
+          options: ["start", "center", "end"],
+          label: "Align",
+        },
+        levaSlidesToScroll: {
+          value: EMBLA_DEFAULTS_PROD.slidesToScroll.toString(),
+          options: ["1", "auto"],
+          label: "Slides To Scroll (Buttons)",
+        },
+        levaContainScroll: {
+          value:
+            EMBLA_DEFAULTS_PROD.containScroll === null
+              ? "null"
+              : EMBLA_DEFAULTS_PROD.containScroll,
+          options: ["null", "trimSnaps", "keepSnaps"],
+          label: "Contain Scroll Behavior",
+        },
+      },
+      { render: (get) => get("Feature Carousel UI.showLevaControls") === true }
+    ),
+    Performance: folderHook(
+      {
+        levaImagePreloadMargin: {
+          value: EMBLA_DEFAULTS_PROD.imagePreloadMargin,
+          min: 0,
+          max: 1000,
+          step: 50,
+          label: "Image Preload Margin (px)",
+        },
+        levaWheelPluginSpeed: {
+          value: EMBLA_DEFAULTS_PROD.wheelPluginSpeed,
+          min: 0.1,
+          max: 5,
+          step: 0.1,
+          label: "Wheel Plugin Speed",
+        },
+      },
+      { render: (get) => get("Feature Carousel UI.showLevaControls") === true }
+    ),
+  };
+  const levaPanelOptions = {
+    collapsed: true,
+    render: (get) => get("Feature Carousel UI.showLevaControls") === true,
+  };
+  const controls = useControlsHook(
+    "Feature Carousel UI",
+    levaSchema,
+    levaPanelOptions
   );
+
+  const cardMaxWidth = controls.levaCardMaxWidth;
+  const slideGap = controls.levaSlideGap;
+  const viewportPaddingMobile = controls.levaViewportPaddingMobile;
+  const viewportPaddingDesktop = controls.levaViewportPaddingDesktop;
+  const align = controls.levaAlign;
+  const slidesToScroll = controls.levaSlidesToScroll;
+  const containScroll = controls.levaContainScroll;
+  const imagePreloadMargin = controls.levaImagePreloadMargin;
+  const wheelPluginSpeed = controls.levaWheelPluginSpeed;
+  const showLevaControls = controls.showLevaControls;
+
+  const {
+    isModalOpen,
+    selectedSlideDataForModal,
+    openModalWithSlide,
+    closeModal,
+  } = useModalState();
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined")
+      setIsTouchDevice(
+        "ontouchstart" in window || navigator.maxTouchPoints > 0
+      );
+  }, []);
 
   const emblaOptions = useMemo(
     () => ({
-      align: levaAlign,
+      align: align,
       slidesToScroll:
-        levaSlidesToScroll === "auto" ? "auto" : Number(levaSlidesToScroll),
-      containScroll: levaContainScroll === "null" ? null : levaContainScroll,
+        slidesToScroll === "auto" ? "auto" : Number(slidesToScroll),
+      containScroll: containScroll === "null" ? null : containScroll,
       loop: false,
       skipSnaps: false,
       watchDrag: true,
     }),
-    [levaAlign, levaSlidesToScroll, levaContainScroll]
+    [align, slidesToScroll, containScroll]
   );
 
-  const [emblaRef, emblaApi] = useEmblaCarousel(emblaOptions, [
-    WheelGesturesPlugin({ speed: levaWheelPluginSpeed }),
-  ]);
+  const emblaPlugins = useMemo(
+    () =>
+      isTouchDevice ? [] : [WheelGesturesPlugin({ speed: wheelPluginSpeed })],
+    [isTouchDevice, wheelPluginSpeed]
+  );
 
+  const [emblaRef, emblaApi] = useEmblaCarousel(emblaOptions, emblaPlugins);
   const viewportElementRef = useRef(null);
 
   const setRefs = useCallback(
@@ -171,19 +277,12 @@ export default function FeatureCarouselClient({ slides, productContext }) {
   );
 
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [scrollSnaps, setScrollSnaps] = useState([]);
+  // const [scrollSnaps, setScrollSnaps] = useState([]); // Not using dots, not strictly needed
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedSlideDataForModal, setSelectedSlideDataForModal] =
-    useState(null);
 
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
-  const scrollTo = useCallback(
-    (index) => emblaApi?.scrollTo(index),
-    [emblaApi]
-  );
+  const scrollPrevCb = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
+  const scrollNextCb = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
 
   const onSelectCallback = useCallback(() => {
     if (!emblaApi) return;
@@ -195,164 +294,159 @@ export default function FeatureCarouselClient({ slides, productContext }) {
   useEffect(() => {
     if (!emblaApi) return;
     onSelectCallback();
-    setScrollSnaps(emblaApi.scrollSnapList());
-
+    // setScrollSnaps(emblaApi.scrollSnapList());
     emblaApi.on("select", onSelectCallback);
     emblaApi.on("reInit", onSelectCallback);
-    const reInitScrollSnaps = () => setScrollSnaps(emblaApi.scrollSnapList());
-    emblaApi.on("reInit", reInitScrollSnaps);
-
+    // const reInitScrollSnaps = () => setScrollSnaps(emblaApi.scrollSnapList());
+    // emblaApi.on("reInit", reInitScrollSnaps);
     return () => {
       emblaApi.off("select", onSelectCallback);
       emblaApi.off("reInit", onSelectCallback);
-      emblaApi.off("reInit", reInitScrollSnaps);
+      // emblaApi.off("reInit", reInitScrollSnaps);
     };
   }, [emblaApi, onSelectCallback]);
 
   useEffect(() => {
-    if (emblaApi) {
-      emblaApi.reInit(emblaOptions);
-    }
+    if (emblaApi) emblaApi.reInit(emblaOptions);
   }, [emblaApi, emblaOptions]);
 
-  const openModalWithSlide = useCallback((slideData) => {
-    if (slideData && slideData.enablePopup) {
-      setSelectedSlideDataForModal(slideData);
-      setIsModalOpen(true);
-    }
-  }, []);
+  useEffect(() => {
+    const viewportNode = viewportElementRef.current;
+    if (!emblaApi || !viewportNode) return;
+    const handleKeyDown = (event) => {
+      if (
+        !viewportNode.contains(document.activeElement) &&
+        document.activeElement !== viewportNode
+      )
+        return;
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        emblaApi.scrollNext();
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        emblaApi.scrollPrev();
+      }
+    };
+    viewportNode.setAttribute("tabindex", "0");
+    viewportNode.addEventListener("keydown", handleKeyDown);
+    return () => viewportNode.removeEventListener("keydown", handleKeyDown);
+  }, [emblaApi]);
 
-  const halfGap = levaSlideGap / 2;
-  const viewportStyle = {
-    paddingLeft: `${levaViewportPaddingStart}px`,
-    paddingRight: `${levaViewportPaddingEnd}px`,
-  };
+  const halfGap = slideGap / 2;
+
+  // Use Tailwind for responsive padding on the viewport div
+  const viewportPaddingClasses = cn(
+    `px-${viewportPaddingMobile / 4}`, // e.g., px-4 for 16px if Tailwind step is 4px
+    `lg:px-${viewportPaddingDesktop / 4}` // e.g., lg:px-16 for 64px
+  );
+
   const containerStyle = {
-    marginLeft: `-${halfGap}px`, // Counteract first item's left padding
-    marginRight: `-${halfGap}px`, // Counteract last item's right padding
+    marginLeft: `-${halfGap}px`,
+    marginRight: `-${halfGap}px`,
+    height: "100%",
   };
 
   return (
     <>
-      {process.env.NODE_ENV === "development" && (
-        <Leva
-          hidden={!showLevaControls}
-          titleBar={{ title: "Carousel Config", filter: false, drag: true }}
+      {showLevaControls && (
+        <LevaComponent
           collapsed={true}
           oneLineLabels
+          titleBar={{ title: "Carousel (Client)", filter: false, drag: true }}
         />
       )}
-      <div className="relative mx-auto max-w-[1900px] group/carousel">
-        {/* Edge Fades for visual indication of more content */}
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-10 bg-gradient-to-l from-transparent to-background content-[''] opacity-0 transition-opacity duration-300 group-hover/carousel:opacity-100 md:w-12 lg:w-16 xl:w-24" />
-
+      <div
+        role="region"
+        aria-label="Feature Carousel"
+        className="relative h-full w-full flex flex-col"
+      >
         <div
-          className="embla overflow-hidden"
+          className={cn(
+            "embla overflow-hidden flex-grow",
+            viewportPaddingClasses
+          )}
           ref={setRefs}
-          style={viewportStyle}
+          id="embla-viewport-feature-carousel"
         >
-          <div className="embla__container flex" style={containerStyle}>
+          <div className="embla__container flex h-full" style={containerStyle}>
             {slides.map((slide, index) => (
               <div
-                className="embla__slide relative shrink-0 grow-0"
+                className={cn(
+                  "embla__slide relative shrink-0 grow-0 h-full rounded-xl overflow-hidden",
+                  // Responsive slide basis:
+                  "basis-[90vw] xs:basis-[85vw] sm:basis-[70vw] md:basis-[calc(50%-var(--slide-gap-calc,0px))] lg:basis-[calc(33.333%-var(--slide-gap-calc,0px))] xl:basis-[calc(25%-var(--slide-gap-calc,0px))]"
+                )}
                 key={slide._key || `slide-${index}`}
                 style={{
-                  flex: `0 0 ${levaCardWidth}px`,
-                  minWidth: `${levaCardWidth}px`,
                   paddingLeft: `${halfGap}px`,
                   paddingRight: `${halfGap}px`,
+                  maxWidth: `${cardMaxWidth}px`,
+                  // CSS variable for more accurate calc() in basis if needed, though Tailwind doesn't directly support this in basis utilities
+                  "--slide-gap-calc": `${slideGap}px`,
                 }}
+                role="group"
+                aria-roledescription="slide"
+                aria-label={`${index + 1} of ${slides.length}: ${
+                  slide.title || "Feature"
+                }`}
               >
                 <FeatureSlideItem
                   slideData={slide}
                   isSnapped={index === selectedIndex}
                   scrollRootRef={viewportElementRef}
-                  imagePreloadMargin={levaImagePreloadMargin}
+                  imagePreloadMargin={imagePreloadMargin}
+                  cardWidth={cardMaxWidth}
                   onOpenPopup={() => openModalWithSlide(slide)}
-                  plusIcon={<Plus size={24} className="stroke-current" />}
                 />
               </div>
             ))}
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-gradient-to-r from-transparent to-background content-[''] opacity-0 transition-opacity duration-300 group-hover/carousel:opacity-100 md:w-12 lg:w-16 xl:w-24" />
-
-        {/* Navigation Controls - Styled to be similar to Rivian example */}
-        {slides.length > 1 && (
+        {slides.length > 1 && emblaApi && (
           <div
             className={cn(
-              // Common styles
-              "relative flex items-center justify-center pointer-events-none", // Parent is pointer-none, children are auto
-              "mt-8 md:mt-10 lg:mt-12", // Spacing from carousel
-              // Desktop specific styles for the "bar"
-              "lg:pointer-events-auto lg:mx-auto lg:w-min lg:p-1.5 lg:rounded-xl",
-              "lg:bg-card/80 lg:dark:bg-neutral-800/80 lg:shadow-lg lg:backdrop-blur-sm"
+              "absolute bottom-6 left-1/2 -translate-x-1/2 z-30",
+              "flex items-center gap-3 sm:gap-4"
             )}
           >
             <Button
-              variant="outline" // Or your "inverted primary" equivalent
+              variant="default"
               size="icon"
               className={cn(
-                "pointer-events-auto mx-1 lg:mx-0", // Ensure buttons are interactive
-                "h-10 w-10 rounded-full",
-                "bg-background/70 hover:bg-muted dark:bg-neutral-700/70 dark:hover:bg-neutral-600", // Example colors
-                "border-border dark:border-neutral-600",
-                "text-foreground dark:text-white",
-                "disabled:opacity-40 disabled:cursor-not-allowed",
-                "hidden lg:inline-flex" // Only show on large screens as per example
+                "pointer-events-auto h-10 w-10 sm:h-12 sm:w-12 rounded-full shadow-lg",
+                "bg-black/50 hover:bg-black/60 active:bg-black/70 text-white backdrop-blur-sm", // Adjusted for more prominent look
+                "disabled:opacity-30 disabled:cursor-not-allowed"
               )}
-              onClick={scrollPrev}
+              onClick={scrollPrevCb}
               disabled={!canScrollPrev}
               aria-label="Previous feature"
+              aria-controls="embla-viewport-feature-carousel"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
             </Button>
 
-            {/* Dots container */}
-            <div className="flex items-center justify-center gap-2 pointer-events-auto px-2">
-              {scrollSnaps.map((_, index) => (
-                <button
-                  key={`dot-${index}`}
-                  onClick={() => scrollTo(index)}
-                  aria-label={`Go to feature ${index + 1}`}
-                  className={cn(
-                    "h-2 rounded-full transition-all duration-300 ease-out",
-                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                    index === selectedIndex
-                      ? "w-6 sm:w-8 bg-primary dark:bg-primary" // Active dot
-                      : "w-2 bg-muted hover:bg-muted-foreground/50 dark:bg-neutral-600 dark:hover:bg-neutral-500" // Inactive dot
-                  )}
-                  data-active-slide={index === selectedIndex} // For potential data-driven styling
-                />
-              ))}
-            </div>
-
             <Button
-              variant="outline"
+              variant="default"
               size="icon"
               className={cn(
-                "pointer-events-auto mx-1 lg:mx-0",
-                "h-10 w-10 rounded-full",
-                "bg-background/70 hover:bg-muted dark:bg-neutral-700/70 dark:hover:bg-neutral-600",
-                "border-border dark:border-neutral-600",
-                "text-foreground dark:text-white",
-                "disabled:opacity-40 disabled:cursor-not-allowed",
-                "hidden lg:inline-flex"
+                "pointer-events-auto h-10 w-10 sm:h-12 sm:w-12 rounded-full shadow-lg",
+                "bg-black/50 hover:bg-black/60 active:bg-black/70 text-white backdrop-blur-sm",
+                "disabled:opacity-30 disabled:cursor-not-allowed"
               )}
-              onClick={scrollNext}
+              onClick={scrollNextCb}
               disabled={!canScrollNext}
               aria-label="Next feature"
+              aria-controls="embla-viewport-feature-carousel"
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
             </Button>
           </div>
         )}
-
         {selectedSlideDataForModal && (
           <FeatureSlideDetailModal
             isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
+            onClose={closeModal}
             slideData={selectedSlideDataForModal}
           />
         )}

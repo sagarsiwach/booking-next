@@ -15,35 +15,102 @@ import { cn } from "@/lib/utils";
 import { gsap } from "gsap";
 import { InertiaPlugin } from "gsap/InertiaPlugin";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-// Only ONE Leva import at a high level. This component will render it.
-// Other components using useControls will automatically use this single Leva provider.
-import { Leva, useControls, folder } from "leva";
+
+// Conditional Leva imports for production tree-shaking
+let LevaComponent = () => null;
+let useControlsHook = (name, schema, options) => {
+  const defaults = {};
+  if (schema) {
+    for (const key in schema) {
+      if (key === "GSAP" || key === "Popmotion") {
+        defaults[key] = {}; // Initialize as object
+        if (schema[key] && typeof schema[key] === "object") {
+          // Check if schema[key] is an object
+          for (const subKey in schema[key]) {
+            if (
+              typeof schema[key][subKey] === "object" &&
+              "value" in schema[key][subKey]
+            ) {
+              defaults[key][subKey] = schema[key][subKey].value;
+            }
+          }
+        }
+      } else if (typeof schema[key] === "object" && "value" in schema[key]) {
+        defaults[key] = schema[key].value;
+      }
+    }
+  }
+  defaults.showLevaControls = schema?.showLevaControls?.value ?? false;
+  defaults.animationLibrary = schema?.animationLibrary?.value ?? "POPMOTION";
+
+  defaults.gsapDragSensitivity =
+    schema?.GSAP?.gsapDragSensitivity?.value ??
+    PHYSICS_PRESETS_GSAP.default.dragSensitivity;
+  defaults.gsapFlickBoost =
+    schema?.GSAP?.gsapFlickBoost?.value ??
+    PHYSICS_PRESETS_GSAP.default.flickBoost;
+  defaults.gsapInertiaResistance =
+    schema?.GSAP?.gsapInertiaResistance?.value ??
+    PHYSICS_PRESETS_GSAP.default.inertiaResistance;
+
+  defaults.popmotionDragFactor =
+    schema?.Popmotion?.popmotionDragFactor?.value ??
+    POPMOTION_DEFAULTS_PROD.dragFactor;
+  defaults.popmotionFlickBoost =
+    schema?.Popmotion?.popmotionFlickBoost?.value ??
+    POPMOTION_DEFAULTS_PROD.flickBoost;
+  defaults.decayPower =
+    schema?.Popmotion?.decayPower?.value ?? POPMOTION_DEFAULTS_PROD.decayPower;
+  defaults.decayTimeConstant =
+    schema?.Popmotion?.decayTimeConstant?.value ??
+    POPMOTION_DEFAULTS_PROD.decayTimeConstant;
+  defaults.decayRestDelta =
+    schema?.Popmotion?.decayRestDelta?.value ??
+    POPMOTION_DEFAULTS_PROD.decayRestDelta;
+
+  return defaults;
+};
+let folderHook = (schema, options) => schema; // For production, folder doesn't modify the schema
+
+if (process.env.NODE_ENV === "development") {
+  try {
+    const leva = require("leva");
+    LevaComponent = leva.Leva;
+    useControlsHook = leva.useControls;
+    folderHook = leva.folder;
+  } catch (error) {
+    console.warn(
+      "Leva could not be loaded in development. Dev controls will not be available.",
+      error
+    );
+  }
+}
 
 import { useProgressiveImageLoader } from "@/hooks/useProgressiveImageLoader";
 import { useTurntableControls as useTurntableControlsGSAP } from "@/hooks/useTurntableControls";
 import { useTurntableControlsFramer } from "@/hooks/useTurntableControlsFramer";
 import { useCanvasRenderer } from "@/hooks/useCanvasRenderer";
 
-// ... (GSAP registration, constants, etc. - no change from your last full version)
 if (typeof window !== "undefined") {
   gsap.registerPlugin(InertiaPlugin);
 }
-const DEBUG_COMPONENT = true;
+
+const DEBUG_COMPONENT = process.env.NODE_ENV === "development";
+
 const PHYSICS_PRESETS_GSAP = {
   default: { dragSensitivity: 1.8, flickBoost: 2.5, inertiaResistance: 180 },
 };
-const ACTIVE_GSAP_PHYSICS_PRESET = PHYSICS_PRESETS_GSAP.default;
-const FRAMES_TO_USE = 360;
-const POPMOTION_DEFAULTS = {
+// Using const for production defaults
+const POPMOTION_DEFAULTS_PROD = {
   dragFactor: 15,
   flickBoost: 1,
   decayPower: 0.7,
-  decayTimeConstant: 700,
+  decayTimeConstant: 500,
   decayRestDelta: 0.4,
 };
+const FRAMES_TO_USE = 360;
 
 export default function ConfiguratorSection({ block, productContext }) {
-  // ... (block destructuring - no change)
   const {
     modelCode,
     colors: colorsFromBlock = [],
@@ -54,142 +121,153 @@ export default function ConfiguratorSection({ block, productContext }) {
     imageFit = "cover",
     initialFrameOverride = block?.initialFrameOverride ?? 0,
   } = block || {};
+
   const frameCount = FRAMES_TO_USE || block?.frameCount || 72;
 
-  // Leva controls for Turntable are defined here
-  const {
-    animationLibrary,
-    gsapDragSensitivity,
-    gsapFlickBoost,
-    gsapInertiaResistance,
-    popmotionDragFactor,
-    popmotionFlickBoost,
-    decayPower,
-    decayTimeConstant,
-    decayRestDelta,
-    showLevaControls, // This master toggle controls visibility of the Leva panel
-  } = useControls(
-    "Turntable Physics",
-    {
-      /* ... Turntable Leva controls definition - no change ... */
-      showLevaControls: {
-        value: process.env.NODE_ENV === "development",
-        label: "Show Dev Controls",
-      },
-      animationLibrary: {
-        value: "POPMOTION",
-        options: ["POPMOTION", "GSAP"],
-        label: "Animation Library",
-        render: (get) => get("Turntable Physics.showLevaControls"),
-      },
-      GSAP: folder(
-        {
-          gsapDragSensitivity: {
-            value: ACTIVE_GSAP_PHYSICS_PRESET.dragSensitivity,
-            min: 0.1,
-            max: 5,
-            step: 0.1,
-            label: "Drag Sensitivity",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "GSAP" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-          gsapFlickBoost: {
-            value: ACTIVE_GSAP_PHYSICS_PRESET.flickBoost,
-            min: 0.1,
-            max: 10,
-            step: 0.1,
-            label: "Flick Boost",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "GSAP" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-          gsapInertiaResistance: {
-            value: ACTIVE_GSAP_PHYSICS_PRESET.inertiaResistance,
-            min: 10,
-            max: 500,
-            step: 10,
-            label: "Inertia Resistance",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "GSAP" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-        },
-        {
-          collapsed: true,
-          render: (get) =>
-            get("Turntable Physics.animationLibrary") === "GSAP" &&
-            get("Turntable Physics.showLevaControls"),
-        }
-      ),
-      Popmotion: folder(
-        {
-          popmotionDragFactor: {
-            value: POPMOTION_DEFAULTS.dragFactor,
-            min: 0.5,
-            max: 20,
-            step: 0.1,
-            label: "Drag Factor (Higher=Less Sens)",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "POPMOTION" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-          popmotionFlickBoost: {
-            value: POPMOTION_DEFAULTS.flickBoost,
-            min: 1,
-            max: 100,
-            step: 1,
-            label: "Flick Boost",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "POPMOTION" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-          decayPower: {
-            value: POPMOTION_DEFAULTS.decayPower,
-            min: 0.1,
-            max: 1,
-            step: 0.05,
-            label: "Decay Power",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "POPMOTION" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-          decayTimeConstant: {
-            value: POPMOTION_DEFAULTS.decayTimeConstant,
-            min: 50,
-            max: 1000,
-            step: 10,
-            label: "Decay Time Constant",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "POPMOTION" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-          decayRestDelta: {
-            value: POPMOTION_DEFAULTS.decayRestDelta,
-            min: 0.01,
-            max: 2,
-            step: 0.01,
-            label: "Decay Rest Delta",
-            render: (get) =>
-              get("Turntable Physics.animationLibrary") === "POPMOTION" &&
-              get("Turntable Physics.showLevaControls"),
-          },
-        },
-        {
-          collapsed: false,
-          render: (get) =>
-            get("Turntable Physics.animationLibrary") === "POPMOTION" &&
-            get("Turntable Physics.showLevaControls"),
-        }
-      ),
+  const levaSchema = {
+    showLevaControls: {
+      value: process.env.NODE_ENV === "development",
+      label: "Show Dev Controls",
+      transient: true,
     },
-    {
-      collapsed: process.env.NODE_ENV === "production",
-      render: (get) => get("Turntable Physics.showLevaControls"), // Overall panel visibility
-    }
+    animationLibrary: {
+      value: "POPMOTION",
+      options: ["POPMOTION", "GSAP"],
+      label: "Animation Library",
+      render: (get) => get("Turntable Physics.showLevaControls") === true, // Ensure boolean check
+    },
+    GSAP: folderHook(
+      {
+        gsapDragSensitivity: {
+          value: PHYSICS_PRESETS_GSAP.default.dragSensitivity,
+          min: 0.1,
+          max: 10,
+          step: 0.1,
+          label: "Drag Sensitivity (GSAP)",
+        },
+        gsapFlickBoost: {
+          value: PHYSICS_PRESETS_GSAP.default.flickBoost,
+          min: 0.1,
+          max: 10,
+          step: 0.1,
+          label: "Flick Boost (GSAP)",
+        },
+        gsapInertiaResistance: {
+          value: PHYSICS_PRESETS_GSAP.default.inertiaResistance,
+          min: 10,
+          max: 1000,
+          step: 10,
+          label: "Inertia Resistance (GSAP)",
+        },
+      },
+      {
+        collapsed: true,
+        render: (get) =>
+          get("Turntable Physics.animationLibrary") === "GSAP" &&
+          get("Turntable Physics.showLevaControls") === true,
+      }
+    ),
+    Popmotion: folderHook(
+      {
+        popmotionDragFactor: {
+          value: POPMOTION_DEFAULTS_PROD.dragFactor,
+          min: 1,
+          max: 50,
+          step: 0.5,
+          label: "Drag Factor (Higher=Less Sens)",
+        },
+        popmotionFlickBoost: {
+          value: POPMOTION_DEFAULTS_PROD.flickBoost,
+          min: 0,
+          max: 100,
+          step: 1,
+          label: "Flick Boost",
+        },
+        decayPower: {
+          value: POPMOTION_DEFAULTS_PROD.decayPower,
+          min: 0.1,
+          max: 1.5,
+          step: 0.01,
+          label: "Decay Power",
+        },
+        decayTimeConstant: {
+          value: POPMOTION_DEFAULTS_PROD.decayTimeConstant,
+          min: 50,
+          max: 1500,
+          step: 10,
+          label: "Decay Time Constant",
+        },
+        decayRestDelta: {
+          value: POPMOTION_DEFAULTS_PROD.decayRestDelta,
+          min: 0.01,
+          max: 5,
+          step: 0.01,
+          label: "Decay Rest Delta",
+        },
+      },
+      {
+        collapsed: false,
+        render: (get) =>
+          get("Turntable Physics.animationLibrary") === "POPMOTION" &&
+          get("Turntable Physics.showLevaControls") === true,
+      }
+    ),
+  };
+
+  const levaPanelOptions = {
+    collapsed: process.env.NODE_ENV === "production", // Fully collapse in prod
+    render: (get) => get("Turntable Physics.showLevaControls") === true, // Ensure render is boolean
+  };
+
+  const controls = useControlsHook(
+    "Turntable Physics",
+    levaSchema,
+    levaPanelOptions
   );
 
-  // ... (All other hooks, state, memos, callbacks, and useEffects for ConfiguratorSection - no change from your last full working version)
+  // Use values from levaControls if in dev and shown, otherwise use production defaults
+  const animationLibrary =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.animationLibrary
+      : "POPMOTION";
+
+  const gsapDragSensitivity =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.gsapDragSensitivity
+      : PHYSICS_PRESETS_GSAP.default.dragSensitivity;
+  const gsapFlickBoost =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.gsapFlickBoost
+      : PHYSICS_PRESETS_GSAP.default.flickBoost;
+  const gsapInertiaResistance =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.gsapInertiaResistance
+      : PHYSICS_PRESETS_GSAP.default.inertiaResistance;
+
+  const popmotionDragFactor =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.popmotionDragFactor
+      : POPMOTION_DEFAULTS_PROD.dragFactor;
+  const popmotionFlickBoost =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.popmotionFlickBoost
+      : POPMOTION_DEFAULTS_PROD.flickBoost;
+  const decayPower =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.decayPower
+      : POPMOTION_DEFAULTS_PROD.decayPower;
+  const decayTimeConstant =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.decayTimeConstant
+      : POPMOTION_DEFAULTS_PROD.decayTimeConstant;
+  const decayRestDelta =
+    process.env.NODE_ENV === "development" && controls.showLevaControls
+      ? controls.decayRestDelta
+      : POPMOTION_DEFAULTS_PROD.decayRestDelta;
+
+  const showLevaControls =
+    process.env.NODE_ENV === "development" ? controls.showLevaControls : false;
+
   const log = useCallback((...args) => {
     if (DEBUG_COMPONENT) console.log("[ConfiguratorComp]", ...args);
   }, []);
@@ -232,6 +310,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     () => (initialFrameOverride + frameCount) % frameCount,
     [initialFrameOverride, frameCount]
   );
+
   const isLgScreen = useMediaQuery("(min-width: 1024px)");
   const isTabletScreen = useMediaQuery("(min-width: 768px)");
   const is2xl = useMediaQuery("(min-width: 1536px)");
@@ -243,6 +322,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     if (isMd) return "tablet";
     return "phone";
   }, [is2xl, isXl, isMd]);
+
   const [currentColorSlug, setCurrentColorSlug] = useState(initialColorSlug);
   const [visualFrame, setVisualFrame] = useState(safeInitialFrame);
   const [isTurntableInteracting, setIsTurntableInteracting] = useState(false);
@@ -255,9 +335,11 @@ export default function ConfiguratorSection({ block, productContext }) {
     useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [devicePixelRatio, setDevicePixelRatio] = useState(1);
+
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const colorSelectorContainerRef = useRef(null);
+
   const imageUrls = useMemo(() => {
     if (
       !modelCode ||
@@ -280,6 +362,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     frameCount,
     generateImageUrls,
   ]);
+
   const {
     imageElementsRef,
     imageStatusRef,
@@ -293,6 +376,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     loadPhase,
   } = useProgressiveImageLoader(imageUrls, frameCount, safeInitialFrame);
   const initialFrameActuallyLoaded = !isLoadingInitial;
+
   useEffect(() => {
     const currentPhysics =
       animationLibrary === "GSAP"
@@ -340,6 +424,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     loadPhase,
     loadingProgress,
   ]);
+
   const commonTurntableOptions = useMemo(
     () => ({
       initialFrame: safeInitialFrame,
@@ -392,6 +477,7 @@ export default function ConfiguratorSection({ block, productContext }) {
       prioritizeLoad,
     ]
   );
+
   const gsapTurntableOptions = useMemo(
     () => ({
       ...commonTurntableOptions,
@@ -426,6 +512,7 @@ export default function ConfiguratorSection({ block, productContext }) {
       decayRestDelta,
     ]
   );
+
   const gsapControls = useTurntableControlsGSAP(
     containerRef,
     frameCount,
@@ -436,9 +523,11 @@ export default function ConfiguratorSection({ block, productContext }) {
     frameCount,
     framerPopmotionTurntableOptions
   );
+
   const activeControls =
     animationLibrary === "GSAP" ? gsapControls : framerPopmotionControls;
   const { setFrame: setTurntableFrame, bindGestures } = activeControls;
+
   useCanvasRenderer(
     canvasRef,
     imageElementsRef.current,
@@ -451,6 +540,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     initialFrameActuallyLoaded,
     safeInitialFrame
   );
+
   useEffect(() => {
     const checkContainerWidth = () => {
       if (containerRef.current) {
@@ -508,6 +598,7 @@ export default function ConfiguratorSection({ block, productContext }) {
       if (setTurntableFrame) setTurntableFrame(safeInitialFrame, true);
     }
   }, [initialColorSlug, currentColorSlug, safeInitialFrame, setTurntableFrame]);
+
   const handleColorChange = useCallback(
     (newColorSlug) => {
       if (newColorSlug === currentColorSlug || isLoadingInitial) return;
@@ -517,6 +608,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     },
     [currentColorSlug, isLoadingInitial, safeInitialFrame, setTurntableFrame]
   );
+
   const finalSectionTitle = blockSectionTitle || "Vehicle Overview";
   const finalSectionSubtitle = blockSectionSubtitle || "Drag to Explore";
   const dragHintOpacity = useMemo(() => {
@@ -535,6 +627,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     if (isTurntableInteracting || isAnimating) return "grabbing";
     return "grab";
   }, [isLoadingInitial, dragHintOpacity, isTurntableInteracting, isAnimating]);
+
   const renderColorSelector = () => {
     if (!colorsFromBlock || colorsFromBlock.length === 0) return null;
     const currentSelectedColorObj = colorsFromBlock.find(
@@ -612,6 +705,7 @@ export default function ConfiguratorSection({ block, productContext }) {
       </div>
     );
   };
+
   if (!modelCode || !initialColorSlug || frameCount <= 0) {
     return (
       <section
@@ -657,26 +751,21 @@ export default function ConfiguratorSection({ block, productContext }) {
 
   return (
     <>
-      {/* Render Leva panel here. It will collect controls from all useControls hooks. */}
-      {/* Ensure it's only rendered once at a high enough level if multiple components use Leva. */}
-      {/* For now, ConfiguratorSection is the designated provider for this page's Leva UI. */}
-      <Leva
-        hidden={
-          !showLevaControls && process.env.NODE_ENV === "development"
-            ? false
-            : !showLevaControls
-        } // Show if toggle is on OR if in dev and toggle is not yet defined
-        // hidden={!showLevaControls} // Simpler: just respect the toggle
-        titleBar={{ title: "Page Dev Controls", filter: false, drag: true }}
-        collapsed={process.env.NODE_ENV === "production"} // Collapse in prod if shown
-        oneLineLabels
-      />
+      {showLevaControls && ( // Conditionally render LevaComponent based on the Leva control itself
+        <LevaComponent
+          titleBar={{ title: "Page Dev Controls", filter: false, drag: true }}
+          collapsed={true}
+          oneLineLabels
+        />
+      )}
       <section
         className={cn(
-          "relative w-full min-h-dvh h-dvh overflow-hidden font-sans",
+          "relative w-full overflow-hidden font-sans",
+          "h-[calc(100dvh-var(--navigation-height,81px))] md:h-dvh",
           backgroundColor,
           className
         )}
+        style={{ "--navigation-height": "81px" }}
       >
         <div
           ref={containerRef}
@@ -833,6 +922,8 @@ ConfiguratorSection.propTypes = {
     className: PropTypes.string,
     backgroundColor: PropTypes.string,
     imageFit: PropTypes.oneOf(["contain", "cover"]),
+    // These are now effectively ignored if not in dev with Leva enabled,
+    // as the component uses hardcoded production defaults otherwise.
     dragSensitivity: PropTypes.number,
     flickBoost: PropTypes.number,
     inertiaResistance: PropTypes.number,

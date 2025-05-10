@@ -4,23 +4,23 @@
 import React, { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import Image from "next/image";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Plus } from "lucide-react";
+import Plus from "lucide-react/dist/esm/icons/plus";
 
-/** @typedef {import('./featureCarouselBlock').FeatureSlideData} FeatureSlideData */
+/** @typedef {import('./featureCarouselBlock').FeatureSlideDataSanity} SlideData */
 
-const EMBLA_DEFAULTS = {
-  cardWidth: 400, // Used for fallback in 'sizes' prop of Image
-};
+const FALLBACK_CARD_WIDTH_FOR_SIZES = 480;
 
-export default function FeatureSlideItem({
+const FeatureSlideItemComponent = ({
   slideData,
   isSnapped,
   onOpenPopup,
-  plusIcon = <Plus size={24} className="stroke-current" />,
+  plusIcon = <Plus size={24} className="stroke-current" />, // Default Icon
   scrollRootRef,
-  imagePreloadMargin = 200,
-}) {
+  imagePreloadMargin = 250,
+  cardWidth,
+}) => {
   const { title, subtitle, mediaType, image, videoUrl, enablePopup } =
     slideData;
 
@@ -28,18 +28,12 @@ export default function FeatureSlideItem({
   const [isInView, setIsInView] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !itemRef.current) {
-      return;
-    }
-
+    if (typeof window === "undefined" || !itemRef.current) return;
     const currentItemRef = itemRef.current;
-    // If scrollRootRef.current is not available, observer will use browser viewport by default.
     const rootElement = scrollRootRef?.current || null;
-
     if (scrollRootRef && !scrollRootRef.current) {
-      // console.warn("FeatureSlideItem: scrollRootRef.current not available for IntersectionObserver. Observer will use viewport.");
+      /* console.warn("Observer uses viewport"); */
     }
-
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -53,126 +47,154 @@ export default function FeatureSlideItem({
         threshold: 0.01,
       }
     );
-
     observer.observe(currentItemRef);
-
     return () => {
-      if (currentItemRef) {
-        observer.unobserve(currentItemRef);
-      }
+      if (currentItemRef) observer.unobserve(currentItemRef);
       observer.disconnect();
     };
   }, [scrollRootRef, imagePreloadMargin]);
 
   const shouldLoadWithPriority = isSnapped || isInView;
-
   const handleClick = () => {
-    // console.log("[FeatureSlideItem] Clicked. Slide Title:", slideData?.title, "EnablePopup:", enablePopup, "onOpenPopup type:", typeof onOpenPopup);
     if (enablePopup && typeof onOpenPopup === "function") {
       onOpenPopup();
     }
   };
+  const imageSizes = `(max-width: 640px) 90vw, (max-width: 1024px) 50vw, ${
+    cardWidth || FALLBACK_CARD_WIDTH_FOR_SIZES
+  }px`;
 
   return (
-    <button
+    <motion.button
+      layout
       ref={itemRef}
       type="button"
       onClick={handleClick}
       disabled={!enablePopup || (mediaType === "video" && !enablePopup)}
       className={cn(
-        "group relative block w-full aspect-[2/3] transition-all duration-300 ease-out-expo",
-        "rounded-xl overflow-hidden shadow-lg hover:shadow-2xl focus-visible:shadow-2xl",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "group relative block w-full h-full",
+        "rounded-xl",
+        "shadow-lg hover:shadow-2xl focus-visible:shadow-2xl",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         enablePopup ? "cursor-pointer" : "cursor-default"
       )}
       data-snapped={isSnapped ? "true" : "false"}
       aria-label={title || "View feature details"}
+      whileHover={{ scale: 1.02 }}
+      animate={{ scale: isSnapped ? 1.04 : 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20, mass: 0.7 }}
     >
-      <div className="absolute inset-0 -z-10 bg-muted">
-        {mediaType === "image" && image?.asset?.url && (
-          <Image
-            src={image.asset.url}
-            alt={image.alt || title || ""}
-            fill
-            className={cn(
-              "object-cover transition-transform duration-300 ease-out-expo",
-              "group-hover:scale-[1.03] group-focus-visible:scale-[1.03]",
-              isSnapped ? "scale-[1.05]" : "scale-100"
-            )}
-            sizes={`(max-width: 640px) 90vw, (max-width: 1024px) 50vw, ${EMBLA_DEFAULTS.cardWidth}px`}
-            priority={shouldLoadWithPriority}
-            blurDataURL={image.asset.metadata?.lqip}
-            placeholder={image.asset.metadata?.lqip ? "blur" : "empty"}
-            quality={80}
-          />
-        )}
-        {mediaType === "video" && videoUrl && (
-          <video
-            src={videoUrl}
-            className={cn(
-              "h-full w-full object-cover transition-transform duration-300 ease-out-expo",
-              "group-hover:scale-[1.03] group-focus-visible:scale-[1.03]",
-              isSnapped ? "scale-[1.05]" : "scale-100"
-            )}
-            autoPlay
-            muted
-            loop
-            playsInline
-            poster={image?.asset?.url}
-          >
-            Your browser does not support the video tag.
-          </video>
-        )}
-      </div>
+      {/* This div takes full height/width of button, and its children are positioned within it */}
+      <div className="relative w-full h-full rounded-xl overflow-hidden flex flex-col">
+        {/* Media container - this div will enforce the 2/3 aspect ratio */}
+        <div className="relative w-full aspect-[2/3] bg-muted shrink-0 overflow-hidden rounded-t-xl md:rounded-xl">
+          {" "}
+          {/* Apply aspect here, rounded top or full if no text below */}
+          {mediaType === "image" && image?.asset?.url && (
+            <Image
+              src={image.asset.url}
+              alt={image.alt || title || ""}
+              fill
+              className="object-cover w-full h-full"
+              sizes={imageSizes}
+              priority={shouldLoadWithPriority}
+              blurDataURL={image.asset.metadata?.lqip}
+              placeholder={image.asset.metadata?.lqip ? "blur" : "empty"}
+              quality={80}
+            />
+          )}
+          {mediaType === "video" && videoUrl && (
+            <video
+              src={videoUrl}
+              className="object-cover w-full h-full"
+              autoPlay
+              muted
+              loop
+              playsInline
+              poster={image?.asset?.url}
+            >
+              Your browser does not support the video tag.
+            </video>
+          )}
+        </div>
 
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent opacity-80 group-hover:opacity-90 group-data-[snapped=true]:opacity-95 transition-opacity duration-300" />
+        {/* Gradient overlay for text on top of media */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent opacity-100 group-hover:opacity-90 group-data-[snapped=true]:opacity-95 transition-opacity duration-300 pointer-events-none" />
 
-      {isSnapped && (
-        <div className="absolute inset-0 rounded-xl ring-2 ring-primary/70 ring-offset-2 ring-offset-transparent transition-all duration-300 pointer-events-none" />
-      )}
+        {isSnapped && (
+          <div className="absolute inset-0 rounded-xl ring-2 ring-primary/50 dark:ring-primary/70 ring-offset-1 dark:ring-offset-black ring-offset-white transition-all duration-300 pointer-events-none" />
+        )}
 
-      <div
-        className={cn(
-          "relative z-10 flex h-full flex-col justify-end p-5 pb-8 text-white transition-transform duration-300 ease-out-expo md:p-6 md:pb-10",
-          "group-hover:-translate-y-1 group-focus-visible:-translate-y-1",
-          isSnapped ? "-translate-y-1.5" : "translate-y-0"
-        )}
-      >
-        {title && (
-          <h3
-            className="font-sans text-[clamp(18px,1.8vi+15px,26px)] font-semibold leading-[1.2] tracking-tight text-shadow-sm"
-            style={{ textWrap: "balance" }}
-          >
-            {title}
-          </h3>
-        )}
-        {subtitle && (
-          <p className="mt-1 font-sans text-[clamp(13px,1vi+10px,15px)] font-normal leading-snug text-neutral-200/90 text-shadow-xs">
-            {subtitle}
-          </p>
-        )}
-      </div>
-
-      {enablePopup && plusIcon && (
+        {/* Text content - positioned at the bottom of the entire card */}
         <div
           className={cn(
-            "absolute right-4 top-4 grid aspect-square w-9 h-9 place-items-center rounded-full bg-white/25 dark:bg-black/25 text-white dark:text-neutral-100 opacity-0 transition-all duration-300 ease-out-expo backdrop-blur-sm",
-            "group-hover:opacity-100 group-focus-visible:opacity-100",
-            isSnapped
-              ? "opacity-100 -translate-y-0.5"
-              : "group-hover:-translate-y-0.5"
+            "absolute bottom-0 left-0 right-0 z-10 flex flex-col justify-end p-4 pb-5 sm:p-5 sm:pb-6 text-white" // Consistent padding
+            // translateY can be removed if scale animation is enough
+            // isSnapped ? "-translate-y-1" : "translate-y-0 group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5"
           )}
         >
-          {React.isValidElement(plusIcon)
-            ? React.cloneElement(plusIcon, {
-                className: cn(plusIcon.props.className, "w-5 h-5"),
-              })
-            : null}
+          {title && (
+            <h3
+              className="font-sans text-[clamp(15px,1.6vi+12px,22px)] sm:text-[clamp(16px,1.7vi+13px,24px)] font-semibold leading-[1.25] tracking-tight text-shadow-sm"
+              style={{ textWrap: "balance" }}
+            >
+              {" "}
+              {title}{" "}
+            </h3>
+          )}
+          {subtitle && (
+            <p className="mt-0.5 sm:mt-1 font-sans text-[clamp(11px,0.8vi+8px,13px)] sm:text-[clamp(12px,0.9vi+9px,14px)] font-normal leading-snug text-neutral-200/90 text-shadow-xs">
+              {" "}
+              {subtitle}{" "}
+            </p>
+          )}
         </div>
-      )}
-    </button>
+
+        {enablePopup && plusIcon && (
+          <motion.div
+            className={cn(
+              "absolute right-3 top-3 sm:right-4 sm:top-4 grid aspect-square w-8 h-8 sm:w-9 sm:h-9 place-items-center rounded-full bg-white/20 dark:bg-black/20 text-white dark:text-neutral-100 backdrop-blur-sm hover:bg-white/30 dark:hover:bg-black/30"
+            )}
+            initial={{ opacity: 0, y: 5, scale: 0.8 }}
+            animate={{
+              opacity:
+                isSnapped ||
+                (itemRef.current &&
+                  itemRef.current.matches(":hover, :focus-within"))
+                  ? 1
+                  : 0,
+              y:
+                isSnapped ||
+                (itemRef.current &&
+                  itemRef.current.matches(":hover, :focus-within"))
+                  ? -1
+                  : 5,
+              scale:
+                isSnapped ||
+                (itemRef.current &&
+                  itemRef.current.matches(":hover, :focus-within"))
+                  ? 1
+                  : 0.8,
+            }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            {React.isValidElement(plusIcon)
+              ? React.cloneElement(plusIcon, {
+                  className: cn(
+                    plusIcon.props.className,
+                    "w-4 h-4 sm:w-5 sm:h-5"
+                  ),
+                })
+              : null}
+          </motion.div>
+        )}
+      </div>
+    </motion.button>
   );
-}
+};
+
+const FeatureSlideItem = React.memo(FeatureSlideItemComponent);
+FeatureSlideItem.displayName = "FeatureSlideItem";
 
 FeatureSlideItem.propTypes = {
   slideData: PropTypes.shape({
@@ -183,10 +205,14 @@ FeatureSlideItem.propTypes = {
     image: PropTypes.object,
     videoUrl: PropTypes.string,
     enablePopup: PropTypes.bool,
+    popupContent: PropTypes.array,
   }).isRequired,
   isSnapped: PropTypes.bool.isRequired,
   onOpenPopup: PropTypes.func.isRequired,
   plusIcon: PropTypes.element,
   scrollRootRef: PropTypes.shape({ current: PropTypes.object }),
   imagePreloadMargin: PropTypes.number,
+  cardWidth: PropTypes.number,
 };
+
+export default FeatureSlideItem;
