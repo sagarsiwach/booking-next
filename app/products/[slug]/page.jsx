@@ -1,29 +1,33 @@
 // app/products/[slug]/page.jsx
 import React from "react";
 import { notFound } from "next/navigation";
-import { fetchProductItemBySlug, fetchActiveProductSlugs } from "@/lib/api"; // Updated import
-// import { sanityClient } from "@/lib/sanityClient"; // No longer directly needed here for fetching
+import { fetchProductItemBySlug, fetchActiveProductSlugs } from "@/lib/api";
 
-// Import your block components
+// Import your block components (paths adjusted based on your structure)
 import HeroSection from "@/components/features/products/HeroSection";
-import ConfiguratorSection from "@/components/features/products/ConfiguratorSection";
-// Import other block components as you create/need them
-// import FaqSection from "@/components/features/products/FaqSection";
-// import TextWithImageSection from "@/components/features/products/TextWithImageSection"; // Example
+import ConfiguratorSection from "@/components/features/products/turntable/ConfiguratorSection"; // Corrected Path
+import FaqSection from "@/components/features/products/faq/FaqSection"; // Corrected Path
+import TechSpecsSection from "@/components/features/products/TechSpecsSection";
+import GallerySection from "@/components/features/products/GallerySection";
+import TestimonialSection from "@/components/features/products/TestimonialCarousel";
+import VideoSection from "@/components/features/products/VideoSection";
+import FeatureCarouselBlock from "@/components/features/products/featureCarousel/featureCarouselBlock"; // Corrected Path
 
 // --- Component Mapper ---
 const blockComponents = {
   heroSectionBlock: HeroSection,
   configuratorSectionBlock: ConfiguratorSection,
-  // faqBlock: FaqSection,
-  // textWithImageBlock: TextWithImageSection,
-  // Add other mappings here
+  featureCarouselBlock: FeatureCarouselBlock,
+  faqBlock: FaqSection,
+  techSpecsSection: TechSpecsSection,
+  gallerySection: GallerySection,
+  testimonialSection: TestimonialSection,
+  videoSection: VideoSection,
 };
 
 // --- Main Page Component ---
 export default async function ProductItemPage({ params }) {
-  // No need for props, directly use params
-  const slug = params?.slug;
+  const { slug } = params;
 
   if (!slug) {
     console.error("ProductItemPage: Slug is missing from params.");
@@ -39,79 +43,92 @@ export default async function ProductItemPage({ params }) {
     notFound();
   }
 
-  const { title, pageBuilder = [] } = productItemData;
+  const { title, pageBuilder = [], relatedVehicleData } = productItemData;
 
-  // --- Product Context for child components ---
-  // This is where you'd pass down any top-level product data
-  // that individual blocks might need (e.g., related vehicle for configurator)
-  // For now, it's minimal. Expand as needed based on Sanity data structure.
   const productContext = {
     id: productItemData._id,
-    title: productItemData.title,
-    slug: productItemData.slug,
-    // Example: If 'productItem' links to a 'vehicle' document that has configurator details:
-    // relatedVehicle: productItemData.relatedVehicle // (You'd fetch this in your GROQ query if needed)
-    // For your current `ConfiguratorSection`, it expects `relatedVehicle.slug`, `relatedVehicle.colors`, `relatedVehicle.frameCount`
-    // So, if your `productItem` Sanity document has a reference field named `vehicleData` that points to your `vehicle` document,
-    // your GROQ query would need to fetch it like:
-    // ...,
-    // "relatedVehicle": vehicleData->{
-    //   "slug": modelCode.current, // Assuming modelCode in vehicle schema is for configurator path
-    //   colors[]{ name, "slug": slug.current, isDefault, "colorValue": colorStart.hex }, // Adjust to your vehicle color schema
-    //   "frameCount": configuratorSetup.frameCount // Adjust to your vehicle frameCount schema
-    // }
-    // For now, let's assume ConfiguratorSection gets these directly from its own block props if designed that way,
-    // or we'll need to adjust the GROQ.
-    // Based on your ConfiguratorSection.jsx, it seems to expect this from `productContext.relatedVehicle`.
-    // Let's mock it for now if not fetched, or ensure your GROQ for `productItem` fetches it.
-
-    // **IMPORTANT**: For the ConfiguratorSection to work as written,
-    // `productItemData` needs a `relatedVehicle` field that looks like:
-    // relatedVehicle: { slug: "km3000", colors: [{name: "Red", slug:"red", isDefault: true}], frameCount: 360 }
-    // Adjust your `fetchProductItemBySlug` GROQ if `productItem` links to a `vehicle` document.
-    // If `configuratorSectionBlock` itself contains `modelCode`, `colors`, `frameCount`, then this context is less critical for it.
-    // Your `configuratorSectionBlock` in Sanity has `modelCode`, `frameCount`, `colors`. So, it's self-contained.
-    // Let's simplify the context for now.
+    productPageTitle: title,
+    productSlug: productItemData.slug?.current,
   };
 
   return (
     <main>
-      {/* Optional: Render a global page title if not handled by a hero */}
-      {/* <h1 className="text-4xl font-bold mb-8 text-center">{title || "Product"}</h1> */}
-
       {pageBuilder && pageBuilder.length > 0 ? (
         pageBuilder.map((block) => {
+          if (!block || !block._type || !block._key) {
+            console.warn("Skipping invalid block structure:", block);
+            return null;
+          }
+
           const Component = blockComponents[block._type];
+
           if (!Component) {
             console.warn(`No component found for block type: ${block._type}`);
-            return (
-              <div
-                key={block._key}
-                className="container mx-auto px-4 py-8 my-4 border border-dashed border-red-400 bg-red-50"
-              >
-                <p className="text-red-700">
-                  <strong>Warning:</strong> Component for block type "
-                  <code>{block._type}</code>" is not implemented.
-                </p>
-                <pre className="text-xs bg-red-100 p-2 overflow-auto mt-2">
-                  {JSON.stringify(block, null, 2)}
-                </pre>
-              </div>
-            );
+            if (process.env.NODE_ENV === "development") {
+              return (
+                <div
+                  key={block._key}
+                  className="container mx-auto my-4 border border-dashed border-red-400 bg-red-50 p-4 py-8"
+                >
+                  <p className="font-semibold text-red-700">
+                    Missing Component Warning:
+                  </p>
+                  <p className="text-sm text-red-600">
+                    No component registered in <code>page.jsx</code> for block
+                    type "<code>{block._type}</code>".
+                  </p>
+                  <details className="mt-2 text-xs">
+                    <summary>Block Data</summary>
+                    <pre className="mt-1 overflow-auto rounded bg-red-100 p-2 text-red-900">
+                      {JSON.stringify(block, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              );
+            }
+            return null;
           }
-          // Pass the block data and the product context to each component
-          return (
-            <Component
-              key={block._key}
-              block={block}
-              productContext={productContext}
-            />
-          );
+
+          try {
+            return (
+              <Component
+                key={block._key}
+                block={block}
+                productContext={productContext}
+              />
+            );
+          } catch (error) {
+            console.error(
+              `Error rendering component for block type ${block._type} (key: ${block._key}):`,
+              error
+            );
+            if (process.env.NODE_ENV === "development") {
+              return (
+                <div
+                  key={block._key}
+                  className="container mx-auto my-4 border border-dashed border-red-500 bg-red-100 p-4 py-8"
+                >
+                  <p className="font-semibold text-red-800">
+                    Component Rendering Error ({block._type})
+                  </p>
+                  <p className="mt-1 text-sm text-red-700">{error.message}</p>
+                  <details className="mt-2 text-xs">
+                    <summary>Block Data</summary>
+                    <pre className="mt-1 overflow-auto rounded bg-red-200 p-2 text-red-900">
+                      {JSON.stringify(block, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              );
+            }
+            return null;
+          }
         })
       ) : (
-        <div className="container mx-auto px-4 py-12 text-center">
-          <p className="text-xl text-gray-500">
-            This product page has no content sections defined yet.
+        <div className="container mx-auto py-12 px-4 text-center">
+          <p className="text-xl text-muted-foreground">
+            This product page has no content sections defined yet. Please add
+            content in the CMS.
           </p>
         </div>
       )}
@@ -119,31 +136,34 @@ export default async function ProductItemPage({ params }) {
   );
 }
 
-// --- Generate Metadata (Adjusted to use the new fetch function) ---
+// --- Generate Metadata ---
 export async function generateMetadata({ params }) {
-  const slug = params?.slug;
+  const { slug } = params;
   if (!slug) return { title: "Product Not Found" };
 
   const productItemData = await fetchProductItemBySlug(slug);
 
   if (!productItemData) {
-    return {
-      title: "Product Not Found",
-      robots: { index: false },
-    };
+    return { title: "Product Not Found", robots: { index: false } };
   }
 
-  const pageTitle = productItemData.title || "Kabira Mobility Product";
-  // For meta description, you'd ideally pull from an SEO field in Sanity.
-  // Falling back to a generic one or the first bit of text content.
+  const pageTitle =
+    productItemData.seo?.metaTitle ||
+    productItemData.title ||
+    "Kabira Mobility Product";
   const pageDescription =
     productItemData.seo?.metaDescription ||
-    `Learn more about ${pageTitle} from Kabira Mobility.`; // Example fallback
+    `Learn more about the ${
+      productItemData.title || "Kabira EV"
+    } from Kabira Mobility. High-performance electric vehicles.`;
 
-  const ogImage =
-    productItemData.seo?.ogImage?.asset?.url ||
-    productItemData.pageBuilder?.find((b) => b._type === "heroSectionBlock")
-      ?.image?.asset?.url;
+  let ogImage = productItemData.seo?.ogImage?.asset?.url;
+  if (!ogImage) {
+    const heroBlock = productItemData.pageBuilder?.find(
+      (b) => b._type === "heroSectionBlock" && b.image?.asset?.url
+    );
+    ogImage = heroBlock?.image?.asset?.url;
+  }
 
   return {
     title: pageTitle,
@@ -151,15 +171,14 @@ export async function generateMetadata({ params }) {
     openGraph: {
       title: pageTitle,
       description: pageDescription.substring(0, 160),
-      type: "website", // Or "product" if you have specific product OG type data
+      type: "website",
       ...(ogImage && { images: [{ url: ogImage }] }),
     },
   };
 }
 
-// --- Generate Static Params (Using the new fetch function) ---
+// --- Generate Static Params ---
 export async function generateStaticParams() {
-  const slugs = await fetchActiveProductSlugs(); // Uses the updated function
-  console.log(`Generating static params for ${slugs.length} product items.`);
-  return slugs; // `fetchActiveProductSlugs` already returns the correct format [{slug: '...'}, ...]
+  const slugs = await fetchActiveProductSlugs();
+  return slugs;
 }
