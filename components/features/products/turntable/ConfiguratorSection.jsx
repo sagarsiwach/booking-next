@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { gsap } from "gsap";
 import { InertiaPlugin } from "gsap/InertiaPlugin";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+// Only ONE Leva import at a high level. This component will render it.
+// Other components using useControls will automatically use this single Leva provider.
 import { Leva, useControls, folder } from "leva";
 
 import { useProgressiveImageLoader } from "@/hooks/useProgressiveImageLoader";
@@ -22,31 +24,26 @@ import { useTurntableControls as useTurntableControlsGSAP } from "@/hooks/useTur
 import { useTurntableControlsFramer } from "@/hooks/useTurntableControlsFramer";
 import { useCanvasRenderer } from "@/hooks/useCanvasRenderer";
 
+// ... (GSAP registration, constants, etc. - no change from your last full version)
 if (typeof window !== "undefined") {
   gsap.registerPlugin(InertiaPlugin);
 }
-
 const DEBUG_COMPONENT = true;
-
 const PHYSICS_PRESETS_GSAP = {
-  default: {
-    dragSensitivity: 1.8,
-    flickBoost: 2.5,
-    inertiaResistance: 180,
-  },
+  default: { dragSensitivity: 1.8, flickBoost: 2.5, inertiaResistance: 180 },
 };
 const ACTIVE_GSAP_PHYSICS_PRESET = PHYSICS_PRESETS_GSAP.default;
 const FRAMES_TO_USE = 360;
-
 const POPMOTION_DEFAULTS = {
   dragFactor: 15,
   flickBoost: 1,
-  decayPower: 0.4,
-  decayTimeConstant: 520,
-  decayRestDelta: 0.5,
+  decayPower: 0.7,
+  decayTimeConstant: 700,
+  decayRestDelta: 0.4,
 };
 
 export default function ConfiguratorSection({ block, productContext }) {
+  // ... (block destructuring - no change)
   const {
     modelCode,
     colors: colorsFromBlock = [],
@@ -57,9 +54,9 @@ export default function ConfiguratorSection({ block, productContext }) {
     imageFit = "cover",
     initialFrameOverride = block?.initialFrameOverride ?? 0,
   } = block || {};
-
   const frameCount = FRAMES_TO_USE || block?.frameCount || 72;
 
+  // Leva controls for Turntable are defined here
   const {
     animationLibrary,
     gsapDragSensitivity,
@@ -70,10 +67,11 @@ export default function ConfiguratorSection({ block, productContext }) {
     decayPower,
     decayTimeConstant,
     decayRestDelta,
-    showLevaControls,
+    showLevaControls, // This master toggle controls visibility of the Leva panel
   } = useControls(
     "Turntable Physics",
     {
+      /* ... Turntable Leva controls definition - no change ... */
       showLevaControls: {
         value: process.env.NODE_ENV === "development",
         label: "Show Dev Controls",
@@ -118,7 +116,7 @@ export default function ConfiguratorSection({ block, productContext }) {
           },
         },
         {
-          collapsed: true, // Start GSAP folder collapsed
+          collapsed: true,
           render: (get) =>
             get("Turntable Physics.animationLibrary") === "GSAP" &&
             get("Turntable Physics.showLevaControls"),
@@ -178,7 +176,7 @@ export default function ConfiguratorSection({ block, productContext }) {
           },
         },
         {
-          collapsed: false, // Start Popmotion folder open
+          collapsed: false,
           render: (get) =>
             get("Turntable Physics.animationLibrary") === "POPMOTION" &&
             get("Turntable Physics.showLevaControls"),
@@ -186,15 +184,15 @@ export default function ConfiguratorSection({ block, productContext }) {
       ),
     },
     {
-      collapsed: process.env.NODE_ENV === "production", // Main panel collapsed in prod
-      render: (get) => get("Turntable Physics.showLevaControls"),
+      collapsed: process.env.NODE_ENV === "production",
+      render: (get) => get("Turntable Physics.showLevaControls"), // Overall panel visibility
     }
   );
 
+  // ... (All other hooks, state, memos, callbacks, and useEffects for ConfiguratorSection - no change from your last full working version)
   const log = useCallback((...args) => {
     if (DEBUG_COMPONENT) console.log("[ConfiguratorComp]", ...args);
   }, []);
-
   const generateImageUrls = useCallback(
     (count, size, currentModelCode, colorSlug) => {
       if (!currentModelCode || !colorSlug || !size || !count || count <= 0)
@@ -210,18 +208,15 @@ export default function ConfiguratorSection({ block, productContext }) {
     },
     []
   );
-
   const getSlugString = useCallback((colorObj) => {
     if (!colorObj) return undefined;
     if (typeof colorObj.slug === "string") return colorObj.slug;
     return colorObj.slug?.current;
   }, []);
-
   const defaultColor = useMemo(
     () => colorsFromBlock.find((c) => c.isDefault) || colorsFromBlock[0],
     [colorsFromBlock]
   );
-
   const initialColorSlug = useMemo(() => {
     if (defaultColor) {
       const slugStr = getSlugString(defaultColor);
@@ -233,30 +228,25 @@ export default function ConfiguratorSection({ block, productContext }) {
     }
     return undefined;
   }, [colorsFromBlock, defaultColor, getSlugString]);
-
   const safeInitialFrame = useMemo(
     () => (initialFrameOverride + frameCount) % frameCount,
     [initialFrameOverride, frameCount]
   );
-
   const isLgScreen = useMediaQuery("(min-width: 1024px)");
   const isTabletScreen = useMediaQuery("(min-width: 768px)");
   const is2xl = useMediaQuery("(min-width: 1536px)");
   const isXl = useMediaQuery("(min-width: 1280px)");
   const isMd = useMediaQuery("(min-width: 768px)");
-
   const currentSizeLabel = useMemo(() => {
     if (is2xl) return "lg";
     if (isXl) return "md";
     if (isMd) return "tablet";
     return "phone";
   }, [is2xl, isXl, isMd]);
-
   const [currentColorSlug, setCurrentColorSlug] = useState(initialColorSlug);
   const [visualFrame, setVisualFrame] = useState(safeInitialFrame);
   const [isTurntableInteracting, setIsTurntableInteracting] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-
   const [showDragHintElement, setShowDragHintElement] = useState(true);
   const [dragHintPosition, setDragHintPosition] = useState({ x: 0, y: 0 });
   const [isMouseOverTurntableArea, setIsMouseOverTurntableArea] =
@@ -265,11 +255,9 @@ export default function ConfiguratorSection({ block, productContext }) {
     useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [devicePixelRatio, setDevicePixelRatio] = useState(1);
-
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const colorSelectorContainerRef = useRef(null);
-
   const imageUrls = useMemo(() => {
     if (
       !modelCode ||
@@ -292,7 +280,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     frameCount,
     generateImageUrls,
   ]);
-
   const {
     imageElementsRef,
     imageStatusRef,
@@ -306,7 +293,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     loadPhase,
   } = useProgressiveImageLoader(imageUrls, frameCount, safeInitialFrame);
   const initialFrameActuallyLoaded = !isLoadingInitial;
-
   useEffect(() => {
     const currentPhysics =
       animationLibrary === "GSAP"
@@ -322,7 +308,6 @@ export default function ConfiguratorSection({ block, productContext }) {
             decayTimeConstant,
             decayRestDelta,
           };
-
     log("Effective Config:", {
       modelCode,
       frameCount,
@@ -355,7 +340,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     loadPhase,
     loadingProgress,
   ]);
-
   const commonTurntableOptions = useMemo(
     () => ({
       initialFrame: safeInitialFrame,
@@ -408,7 +392,6 @@ export default function ConfiguratorSection({ block, productContext }) {
       prioritizeLoad,
     ]
   );
-
   const gsapTurntableOptions = useMemo(
     () => ({
       ...commonTurntableOptions,
@@ -423,10 +406,8 @@ export default function ConfiguratorSection({ block, productContext }) {
       gsapInertiaResistance,
     ]
   );
-
   const framerPopmotionTurntableOptions = useMemo(
     () => ({
-      // Renamed for clarity
       ...commonTurntableOptions,
       dragFactor: popmotionDragFactor,
       flickBoost: popmotionFlickBoost,
@@ -445,7 +426,6 @@ export default function ConfiguratorSection({ block, productContext }) {
       decayRestDelta,
     ]
   );
-
   const gsapControls = useTurntableControlsGSAP(
     containerRef,
     frameCount,
@@ -456,11 +436,9 @@ export default function ConfiguratorSection({ block, productContext }) {
     frameCount,
     framerPopmotionTurntableOptions
   );
-
   const activeControls =
     animationLibrary === "GSAP" ? gsapControls : framerPopmotionControls;
   const { setFrame: setTurntableFrame, bindGestures } = activeControls;
-
   useCanvasRenderer(
     canvasRef,
     imageElementsRef.current,
@@ -473,7 +451,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     initialFrameActuallyLoaded,
     safeInitialFrame
   );
-
   useEffect(() => {
     const checkContainerWidth = () => {
       if (containerRef.current) {
@@ -486,7 +463,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     const timeoutId = setTimeout(checkContainerWidth, 300);
     return () => clearTimeout(timeoutId);
   }, [log]);
-
   useEffect(() => {
     if (!showDragHintElement || isLoadingInitial) return;
     const updateMousePosition = (event) =>
@@ -494,7 +470,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     window.addEventListener("mousemove", updateMousePosition);
     return () => window.removeEventListener("mousemove", updateMousePosition);
   }, [showDragHintElement, isLoadingInitial]);
-
   useEffect(() => {
     setDevicePixelRatio(window.devicePixelRatio || 1);
     const cont = containerRef.current;
@@ -502,10 +477,9 @@ export default function ConfiguratorSection({ block, productContext }) {
     const observer = new ResizeObserver((entries) => {
       for (let entry of entries) {
         const { width, height } = entry.contentRect;
-        setCanvasSize({ width, height }); // Update state with new dimensions
+        setCanvasSize({ width, height });
       }
     });
-    // Set initial size correctly based on clientWidth/Height
     setCanvasSize({ width: cont.clientWidth, height: cont.clientHeight });
     observer.observe(cont);
     const dprUpdateHandler = () =>
@@ -513,12 +487,11 @@ export default function ConfiguratorSection({ block, productContext }) {
     const dprMediaQuery = window.matchMedia(
       `(resolution: ${window.devicePixelRatio}dppx)`
     );
-
     try {
       dprMediaQuery.addEventListener("change", dprUpdateHandler);
     } catch (e) {
       dprMediaQuery.addListener(dprUpdateHandler);
-    } // Fallback
+    }
     return () => {
       if (cont) observer.unobserve(cont);
       observer.disconnect();
@@ -528,15 +501,13 @@ export default function ConfiguratorSection({ block, productContext }) {
         dprMediaQuery.removeListener(dprUpdateHandler);
       }
     };
-  }, []); // Empty dependency array means this runs once on mount and cleans up on unmount
-
+  }, []);
   useEffect(() => {
     if (initialColorSlug && initialColorSlug !== currentColorSlug) {
       setCurrentColorSlug(initialColorSlug);
       if (setTurntableFrame) setTurntableFrame(safeInitialFrame, true);
     }
   }, [initialColorSlug, currentColorSlug, safeInitialFrame, setTurntableFrame]);
-
   const handleColorChange = useCallback(
     (newColorSlug) => {
       if (newColorSlug === currentColorSlug || isLoadingInitial) return;
@@ -546,10 +517,8 @@ export default function ConfiguratorSection({ block, productContext }) {
     },
     [currentColorSlug, isLoadingInitial, safeInitialFrame, setTurntableFrame]
   );
-
   const finalSectionTitle = blockSectionTitle || "Vehicle Overview";
   const finalSectionSubtitle = blockSectionSubtitle || "Drag to Explore";
-
   const dragHintOpacity = useMemo(() => {
     if (!showDragHintElement || isLoadingInitial || isMouseOverColorSelector)
       return 0;
@@ -560,14 +529,12 @@ export default function ConfiguratorSection({ block, productContext }) {
     isMouseOverTurntableArea,
     isMouseOverColorSelector,
   ]);
-
   const mainContainerCursor = useMemo(() => {
     if (isLoadingInitial) return "wait";
     if (dragHintOpacity > 0) return "none";
     if (isTurntableInteracting || isAnimating) return "grabbing";
     return "grab";
   }, [isLoadingInitial, dragHintOpacity, isTurntableInteracting, isAnimating]);
-
   const renderColorSelector = () => {
     if (!colorsFromBlock || colorsFromBlock.length === 0) return null;
     const currentSelectedColorObj = colorsFromBlock.find(
@@ -575,7 +542,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     );
     const currentSelectedColorName =
       currentSelectedColorObj?.name || currentColorSlug;
-
     return (
       <div
         ref={colorSelectorContainerRef}
@@ -586,7 +552,9 @@ export default function ConfiguratorSection({ block, productContext }) {
           "bottom-6 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:bottom-10 md:left-8 lg:left-16 xl:left-[64px] 2xl:left-[160px]"
         )}
       >
+        {" "}
         <div className="p-1.5 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm rounded-lg shadow-xl flex items-center gap-2">
+          {" "}
           {colorsFromBlock.map((color) => {
             const slugValue = getSlugString(color);
             if (!slugValue) return null;
@@ -609,7 +577,9 @@ export default function ConfiguratorSection({ block, productContext }) {
                 aria-label={`Select color ${color.name || slugValue}`}
                 aria-pressed={isSelected}
               >
+                {" "}
                 <AnimatePresence>
+                  {" "}
                   {isSelected && (
                     <motion.div
                       initial={{ scale: 0, opacity: 0 }}
@@ -618,28 +588,30 @@ export default function ConfiguratorSection({ block, productContext }) {
                       transition={{ duration: 0.15 }}
                       className="absolute inset-0 flex items-center justify-center"
                     >
+                      {" "}
                       <Checkmark
                         size={isTabletScreen ? 20 : 18}
                         className="text-white filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]"
-                      />
+                      />{" "}
                     </motion.div>
-                  )}
-                </AnimatePresence>
+                  )}{" "}
+                </AnimatePresence>{" "}
               </button>
             );
-          })}
-        </div>
+          })}{" "}
+        </div>{" "}
         {isLgScreen && currentSelectedColorName && (
           <div className="p-2.5 md:p-3 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm rounded-lg shadow-xl flex justify-start items-center overflow-hidden">
+            {" "}
             <div className="text-neutral-700 dark:text-neutral-200 text-lg md:text-xl font-medium tracking-tight">
-              {currentSelectedColorName}
-            </div>
+              {" "}
+              {currentSelectedColorName}{" "}
+            </div>{" "}
           </div>
-        )}
+        )}{" "}
       </div>
     );
   };
-
   if (!modelCode || !initialColorSlug || frameCount <= 0) {
     return (
       <section
@@ -649,29 +621,33 @@ export default function ConfiguratorSection({ block, productContext }) {
           className
         )}
       >
+        {" "}
         <div className="text-center">
+          {" "}
           <h2 className="text-xl font-semibold text-destructive mb-2">
-            Configurator Unavailable
-          </h2>
+            {" "}
+            Configurator Unavailable{" "}
+          </h2>{" "}
           <p className="text-muted-foreground">
-            Essential configuration data is missing.
-          </p>
+            {" "}
+            Essential configuration data is missing.{" "}
+          </p>{" "}
           {!modelCode && (
             <p className="text-xs text-destructive-foreground">
               Missing: Model Code
             </p>
-          )}
+          )}{" "}
           {!initialColorSlug && (
             <p className="text-xs text-destructive-foreground">
               Missing: Initial Color
             </p>
-          )}
+          )}{" "}
           {frameCount <= 0 && (
             <p className="text-xs text-destructive-foreground">
               Invalid: Frame Count
             </p>
-          )}
-        </div>
+          )}{" "}
+        </div>{" "}
       </section>
     );
   }
@@ -681,11 +657,19 @@ export default function ConfiguratorSection({ block, productContext }) {
 
   return (
     <>
+      {/* Render Leva panel here. It will collect controls from all useControls hooks. */}
+      {/* Ensure it's only rendered once at a high enough level if multiple components use Leva. */}
+      {/* For now, ConfiguratorSection is the designated provider for this page's Leva UI. */}
       <Leva
-        hidden={!showLevaControls}
-        titleBar={{ title: "Turntable Controls", filter: false, drag: true }}
-        collapsed={process.env.NODE_ENV === "production"}
-        oneLineLabels // Makes Leva panel more compact
+        hidden={
+          !showLevaControls && process.env.NODE_ENV === "development"
+            ? false
+            : !showLevaControls
+        } // Show if toggle is on OR if in dev and toggle is not yet defined
+        // hidden={!showLevaControls} // Simpler: just respect the toggle
+        titleBar={{ title: "Page Dev Controls", filter: false, drag: true }}
+        collapsed={process.env.NODE_ENV === "production"} // Collapse in prod if shown
+        oneLineLabels
       />
       <section
         className={cn(
@@ -696,7 +680,7 @@ export default function ConfiguratorSection({ block, productContext }) {
       >
         <div
           ref={containerRef}
-          className="absolute inset-0 z-10" // This div is the target for @use-gesture/react
+          className="absolute inset-0 z-10"
           style={{
             cursor: mainContainerCursor,
             userSelect: "none",

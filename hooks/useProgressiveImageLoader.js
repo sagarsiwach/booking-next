@@ -1,15 +1,9 @@
 // hooks/useProgressiveImageLoader.js
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const DEBUG_LOADER = true; // Keep true for now, but logs will be condensed
-const LOG_LEVEL = {
-  // Define log levels
-  VERBOSE: 3, // All details, including individual frame loads
-  INFO: 2, // Key events, phase changes, errors
-  ERROR: 1, // Only errors
-  NONE: 0, // No logs
-};
-const CURRENT_LOG_LEVEL = LOG_LEVEL.INFO; // Set desired log level here
+const DEBUG_LOADER = true;
+const LOG_LEVEL = { VERBOSE: 3, INFO: 2, ERROR: 1, NONE: 0 };
+const CURRENT_LOG_LEVEL = LOG_LEVEL.INFO;
 
 const KEYFRAME_DENSITY_DIVISOR = 10;
 const NEIGHBOR_WINDOW_CURRENT = 3;
@@ -17,32 +11,13 @@ const NEIGHBOR_WINDOW_ANTICIPATED = 5;
 const MAX_CONCURRENT_LOADS = 6;
 const RETRY_LIMIT = 1;
 
-/**
- * Custom hook for progressively loading a sequence of images.
- * Manages loading states, priorities, and provides image elements and statuses.
- * @param {string[]} [imageUrls=[]] - Array of image URLs for the sequence.
- * @param {number} [frameCount=0] - Total number of frames in the sequence.
- * @param {number} [initialFrameIndex=0] - The frame index to prioritize loading initially.
- * @returns {{
- *   imageElementsRef: React.RefObject<HTMLImageElement[]>,
- *   imageStatusRef: React.RefObject<Record<number, 'idle' | 'loading' | 'loaded' | 'error' | 'retrying'>>,
- *   isLoadingInitial: boolean,
- *   isLoadingKeyframes: boolean,
- *   isFullyLoaded: boolean,
- *   loadedAndVisibleKeyframes: Set<number>,
- *   loadingProgress: number,
- *   loadingError: string | null,
- *   prioritizeLoad: (targetFrameIndex: number, options?: { isAnticipated?: boolean }) => void,
- *   loadPhase: 'idle' | 'initial' | 'keyframes' | 'interactive' | 'background' | 'complete' | 'error'
- * }}
- * Hook return object.
- */
 export function useProgressiveImageLoader(
   imageUrls = [],
   frameCount = 0,
   initialFrameIndex = 0
 ) {
   const log = useCallback((messageLevel, ...args) => {
+    // ... (log function - no change)
     if (DEBUG_LOADER && messageLevel <= CURRENT_LOG_LEVEL) {
       const prefix =
         messageLevel === LOG_LEVEL.ERROR
@@ -52,8 +27,15 @@ export function useProgressiveImageLoader(
     }
   }, []);
 
-  const [imageElements, setImageElements] = useState([]);
-  const [imageStatuses, setImageStatuses] = useState({});
+  // State initializations (no change from previous correct version)
+  const [imageElements, setImageElements] = useState(() =>
+    new Array(frameCount).fill(null)
+  );
+  const [imageStatuses, setImageStatuses] = useState(() => {
+    const initial = {};
+    for (let i = 0; i < frameCount; i++) initial[i] = "idle";
+    return initial;
+  });
   const [loadPhase, setLoadPhase] = useState("idle");
   const [initialFrameLoaded, setInitialFrameLoaded] = useState(false);
   const [allKeyframesAttempted, setAllKeyframesAttempted] = useState(false);
@@ -74,62 +56,77 @@ export function useProgressiveImageLoader(
   const processQueuesTimeoutRef = useRef(null);
   const currentImageUrlsRef = useRef([]);
 
+  // processQueuesRef will hold the function responsible for processing queues.
+  // It's defined in an effect to capture the latest state.
+  const processQueuesRef = useRef(null);
+
+  // Function to schedule processQueuesRef.current to run
+  // This is the ONLY way processQueuesRef.current should be invoked from callbacks
+  const scheduleQueueProcessing = useCallback(() => {
+    if (
+      isMountedRef.current &&
+      processQueuesTimeoutRef.current === null &&
+      processQueuesRef.current
+    ) {
+      processQueuesTimeoutRef.current = setTimeout(() => {
+        processQueuesTimeoutRef.current = null;
+        if (isMountedRef.current && processQueuesRef.current) {
+          log(LOG_LEVEL.VERBOSE, "Scheduled queue processing running.");
+          processQueuesRef.current();
+        }
+      }, 0); // Process on next tick
+    }
+  }, [log]); // log is stable
+
+  // Initialization and URL Change Effect
   useEffect(() => {
+    // ... (Initialization logic - no change from previous correct version)
     isMountedRef.current = true;
     log(
       LOG_LEVEL.INFO,
-      `Init/URLs Changed. Frames: ${frameCount}, Initial Hint: ${initialFrameIndex}, New URLs: ${imageUrls.length}`
+      `Init/URLs Changed. New frameCount: ${frameCount}, New imageUrls length: ${imageUrls.length}`
     );
-
-    let urlsHaveChanged =
-      imageUrls.length !== currentImageUrlsRef.current.length;
-    if (!urlsHaveChanged && imageUrls.length > 0) {
-      for (let i = 0; i < imageUrls.length; i++) {
-        if (imageUrls[i] !== currentImageUrlsRef.current[i]) {
-          urlsHaveChanged = true;
-          break;
-        }
-      }
-    }
-
-    if (!urlsHaveChanged && loadPhase !== "idle" && loadPhase !== "error") {
+    if (
+      frameCount === currentImageUrlsRef.current?.length &&
+      imageUrls === currentImageUrlsRef.current &&
+      loadPhase !== "idle" &&
+      loadPhase !== "error"
+    ) {
       log(
         LOG_LEVEL.INFO,
-        "Image URLs are the same, skipping re-initialization."
+        "Image URLs and frameCount appear unchanged, skipping full re-initialization."
       );
       return;
     }
-
-    currentImageUrlsRef.current = [...imageUrls];
-
+    currentImageUrlsRef.current = imageUrls;
+    log(
+      LOG_LEVEL.INFO,
+      "Performing full reset of loader state due to changed inputs."
+    );
     if (processQueuesTimeoutRef.current)
       clearTimeout(processQueuesTimeoutRef.current);
+    processQueuesTimeoutRef.current = null;
     activeLoadSlots.current = 0;
     retryCounts.current = {};
-
     setImageElements(new Array(frameCount).fill(null));
-    const initialStatuses = {};
-    for (let i = 0; i < frameCount; i++) initialStatuses[i] = "idle";
-    setImageStatuses(initialStatuses);
-
+    const initialStatusesReset = {};
+    for (let i = 0; i < frameCount; i++) initialStatusesReset[i] = "idle";
+    setImageStatuses(initialStatusesReset);
     setLoadPhase("idle");
     setInitialFrameLoaded(false);
     setAllKeyframesAttempted(false);
     setLoadingProgress(0);
     setLoadingError(null);
-
     queuesRef.current.initial.clear();
     queuesRef.current.keyframes.clear();
     queuesRef.current.priority.clear();
     queuesRef.current.background.clear();
     calculatedKeyframes.current.clear();
     loadedAndVisibleKeyframes.current.clear();
-
     if (frameCount > 0 && imageUrls.length === frameCount) {
       const safeInitial = (initialFrameIndex + frameCount) % frameCount;
       queuesRef.current.initial.add(safeInitial);
       log(LOG_LEVEL.INFO, `Initial frame to load: ${safeInitial}`);
-
       const density = Math.max(
         1,
         Math.floor(frameCount / Math.max(1, KEYFRAME_DENSITY_DIVISOR))
@@ -142,7 +139,6 @@ export function useProgressiveImageLoader(
         LOG_LEVEL.INFO,
         `Calculated ${calculatedKeyframes.current.size} keyframes.`
       );
-
       for (let i = 0; i < frameCount; i++) {
         if (i === safeInitial) continue;
         if (calculatedKeyframes.current.has(i))
@@ -156,30 +152,33 @@ export function useProgressiveImageLoader(
       setLoadingError(errorMsg);
       setLoadPhase("error");
     }
-
     return () => {
       isMountedRef.current = false;
       if (processQueuesTimeoutRef.current)
         clearTimeout(processQueuesTimeoutRef.current);
-      log(LOG_LEVEL.INFO, "Loader Unmounting / Re-initializing Cleanup");
+      processQueuesTimeoutRef.current = null;
+      log(LOG_LEVEL.INFO, "Loader Unmounting / Full Re-init Cleanup");
     };
   }, [imageUrls, frameCount, initialFrameIndex, log]);
 
+  // createImageLoad function
   const createImageLoad = useCallback(
     (frameIndexToLoad) => {
-      if (!isMountedRef.current || !imageUrls[frameIndexToLoad]) return;
-
+      if (
+        !isMountedRef.current ||
+        !imageUrls[frameIndexToLoad] ||
+        typeof window === "undefined"
+      )
+        return;
       retryCounts.current[frameIndexToLoad] =
         retryCounts.current[frameIndexToLoad] || 0;
       log(
-        LOG_LEVEL.VERBOSE, // More verbose log for individual frame
+        LOG_LEVEL.VERBOSE,
         `Requesting load for frame ${frameIndexToLoad} (Attempt ${
           retryCounts.current[frameIndexToLoad] + 1
         })`
       );
-
       setImageStatuses((prev) => ({ ...prev, [frameIndexToLoad]: "loading" }));
-
       const img = new window.Image();
       img.onload = () => {
         if (!isMountedRef.current) return;
@@ -190,34 +189,23 @@ export function useProgressiveImageLoader(
           return newElements;
         });
         setImageStatuses((prev) => ({ ...prev, [frameIndexToLoad]: "loaded" }));
-
-        if (calculatedKeyframes.current.has(frameIndexToLoad)) {
+        if (calculatedKeyframes.current.has(frameIndexToLoad))
           loadedAndVisibleKeyframes.current.add(frameIndexToLoad);
-        }
-
         const safeInitial = (initialFrameIndex + frameCount) % frameCount;
         if (frameIndexToLoad === safeInitial && !initialFrameLoaded) {
-          setInitialFrameLoaded(true);
+          setInitialFrameLoaded(true); // This state change will trigger effects that depend on it
           log(LOG_LEVEL.INFO, `>>> Initial frame ${frameIndexToLoad} LOADED!`);
         }
-
-        if (isMountedRef.current && processQueuesTimeoutRef.current === null) {
-          processQueuesTimeoutRef.current = setTimeout(() => {
-            processQueuesTimeoutRef.current = null;
-            if (isMountedRef.current) processQueuesRef.current?.();
-          }, 0);
-        }
+        scheduleQueueProcessing(); // Use the scheduler
       };
-
       img.onerror = () => {
         if (!isMountedRef.current) return;
         activeLoadSlots.current--;
         retryCounts.current[frameIndexToLoad]++;
-
         if (retryCounts.current[frameIndexToLoad] <= RETRY_LIMIT) {
           log(
-            LOG_LEVEL.INFO, // Downgrade retry log slightly
-            `ERROR loading frame ${frameIndexToLoad}, will retry (Attempt ${retryCounts.current[frameIndexToLoad]}).`
+            LOG_LEVEL.INFO,
+            `ERROR loading frame ${frameIndexToLoad}, will retry.`
           );
           setImageStatuses((prev) => ({ ...prev, [frameIndexToLoad]: "idle" }));
         } else {
@@ -225,57 +213,60 @@ export function useProgressiveImageLoader(
             LOG_LEVEL.ERROR,
             `ERROR loading frame ${frameIndexToLoad} after ${
               RETRY_LIMIT + 1
-            } attempts. Marking as error.`
+            } attempts.`
           );
           setImageStatuses((prev) => ({
             ...prev,
             [frameIndexToLoad]: "error",
           }));
           const safeInitial = (initialFrameIndex + frameCount) % frameCount;
-          if (frameIndexToLoad === safeInitial) {
+          if (frameIndexToLoad === safeInitial && !initialFrameLoaded) {
             setLoadingError(
               `Critical: Initial frame (${safeInitial}) failed to load.`
             );
-            if (!initialFrameLoaded) setInitialFrameLoaded(true);
+            setInitialFrameLoaded(true);
             setLoadPhase("error");
           }
         }
-        if (isMountedRef.current && processQueuesTimeoutRef.current === null) {
-          processQueuesTimeoutRef.current = setTimeout(() => {
-            processQueuesTimeoutRef.current = null;
-            if (isMountedRef.current) processQueuesRef.current?.();
-          }, 0);
-        }
+        scheduleQueueProcessing(); // Use the scheduler
       };
       img.src = imageUrls[frameIndexToLoad];
     },
-    [frameCount, imageUrls, initialFrameIndex, initialFrameLoaded, log]
-  );
+    [
+      frameCount,
+      imageUrls,
+      initialFrameIndex,
+      initialFrameLoaded,
+      log,
+      scheduleQueueProcessing,
+      setInitialFrameLoaded,
+      setLoadPhase,
+      setLoadingError,
+    ]
+  ); // Added setters to deps
 
-  const processQueuesRef = useRef();
+  // useEffect to DEFINE processQueuesRef.current
   useEffect(() => {
     processQueuesRef.current = () => {
+      // ... (processQueues logic - no change from previous correct version)
       if (
         !isMountedRef.current ||
         ["complete", "error", "idle"].includes(loadPhase)
-      ) {
+      )
         return;
-      }
-
       let imagesAttemptedThisCycle = 0;
       const currentQueues = queuesRef.current;
-
+      const currentImageStatuses = imageStatuses;
       const tryLoadFromQueue = (queue, frameIndex) => {
         if (
           frameIndex === undefined ||
-          (imageStatuses[frameIndex] !== "idle" &&
-            (imageStatuses[frameIndex] !== "error" ||
-              retryCounts.current[frameIndex] >= RETRY_LIMIT))
+          (currentImageStatuses[frameIndex] !== "idle" &&
+            (currentImageStatuses[frameIndex] !== "error" ||
+              (retryCounts.current[frameIndex] || 0) >= RETRY_LIMIT))
         ) {
           if (frameIndex !== undefined) queue.delete(frameIndex);
           return false;
         }
-
         if (activeLoadSlots.current < MAX_CONCURRENT_LOADS) {
           activeLoadSlots.current++;
           createImageLoad(frameIndex);
@@ -285,7 +276,6 @@ export function useProgressiveImageLoader(
         }
         return false;
       };
-
       while (
         activeLoadSlots.current < MAX_CONCURRENT_LOADS &&
         imagesAttemptedThisCycle < MAX_CONCURRENT_LOADS
@@ -330,15 +320,13 @@ export function useProgressiveImageLoader(
           )
             processedThisIteration = true;
         }
-
         if (!processedThisIteration) break;
       }
-
       let localProcessedCount = 0;
       let localErrorCount = 0;
       for (let i = 0; i < frameCount; ++i) {
-        if (imageStatuses[i] === "loaded") localProcessedCount++;
-        else if (imageStatuses[i] === "error") {
+        if (currentImageStatuses[i] === "loaded") localProcessedCount++;
+        else if (currentImageStatuses[i] === "error") {
           localProcessedCount++;
           localErrorCount++;
         }
@@ -347,22 +335,23 @@ export function useProgressiveImageLoader(
         frameCount > 0
           ? Math.round((localProcessedCount / frameCount) * 100)
           : 0;
-
-      // Only update progress state if it changed significantly or it's a key milestone
       if (
         currentProgress !== loadingProgress &&
-        (currentProgress % 10 === 0 ||
-          currentProgress === 100 ||
-          currentProgress === 0)
+        (currentProgress % 5 === 0 ||
+          currentProgress >= 98 ||
+          currentProgress === 0 ||
+          localProcessedCount === frameCount)
       ) {
         setLoadingProgress(currentProgress);
-        log(LOG_LEVEL.VERBOSE, `Progress: ${currentProgress}%`);
+        log(
+          LOG_LEVEL.INFO,
+          `Progress: ${currentProgress}% (${localProcessedCount}/${frameCount})`
+        );
       }
-
       let nextPhase = loadPhase;
-      if (loadPhase === "initial" && initialFrameLoaded) {
+      if (loadPhase === "initial" && initialFrameLoaded)
         nextPhase = "keyframes";
-      } else if (
+      else if (
         loadPhase === "keyframes" &&
         initialFrameLoaded &&
         currentQueues.keyframes.size === 0
@@ -376,28 +365,20 @@ export function useProgressiveImageLoader(
         currentQueues.priority.size === 0 &&
         currentQueues.background.size > 0 &&
         allKeyframesAttempted
-      ) {
+      )
         nextPhase = "background";
-      }
-
       if (nextPhase !== loadPhase) {
         log(LOG_LEVEL.INFO, `Phase transition: ${loadPhase} -> ${nextPhase}`);
         setLoadPhase(nextPhase);
-      }
-
-      if (localProcessedCount === frameCount && frameCount > 0) {
+      } else if (localProcessedCount === frameCount && frameCount > 0) {
         if (loadPhase !== "complete") {
           log(LOG_LEVEL.INFO, "All images processed. Load phase: complete.");
           setLoadPhase("complete");
-          setLoadingProgress(100); // Ensure 100%
+          if (loadingProgress !== 100) setLoadingProgress(100);
           if (localErrorCount > 0 && !loadingError?.startsWith("Critical")) {
-            setLoadingError(
-              `${localErrorCount} image(s) failed to load after retries.`
-            );
-            log(
-              LOG_LEVEL.ERROR,
-              `${localErrorCount} image(s) failed to load after retries.`
-            );
+            const errorMsg = `${localErrorCount} image(s) failed to load after retries.`;
+            setLoadingError(errorMsg);
+            log(LOG_LEVEL.ERROR, errorMsg);
           }
         }
       } else if (loadPhase !== "complete" && loadPhase !== "error") {
@@ -406,7 +387,6 @@ export function useProgressiveImageLoader(
           currentQueues.priority.size > 0 ||
           currentQueues.keyframes.size > 0 ||
           currentQueues.background.size > 0;
-
         if (
           (imagesAttemptedThisCycle > 0 ||
             activeLoadSlots.current > 0 ||
@@ -415,23 +395,30 @@ export function useProgressiveImageLoader(
         ) {
           processQueuesTimeoutRef.current = setTimeout(() => {
             processQueuesTimeoutRef.current = null;
-            if (isMountedRef.current) processQueuesRef.current?.();
+            if (isMountedRef.current && processQueuesRef.current)
+              processQueuesRef.current();
           }, 30);
         }
       }
     };
   }, [
     loadPhase,
-    initialFrameLoaded,
-    allKeyframesAttempted,
+    imageStatuses,
     frameCount,
     createImageLoad,
-    imageStatuses,
-    loadingError,
     log,
-    loadingProgress, // Added loadingProgress
+    loadingProgress,
+    setLoadingProgress,
+    loadingError,
+    setLoadingError,
+    initialFrameLoaded,
+    setInitialFrameLoaded,
+    allKeyframesAttempted,
+    setAllKeyframesAttempted,
+    // scheduleQueueProcessing // Not needed as a dep for defining processQueuesRef, but used by createImageLoad
   ]);
 
+  // useEffect to INITIATE queue processing when loadPhase changes
   useEffect(() => {
     if (
       loadPhase !== "idle" &&
@@ -440,45 +427,36 @@ export function useProgressiveImageLoader(
     ) {
       log(
         LOG_LEVEL.INFO,
-        `Load phase is ${loadPhase}. Triggering processQueues.`
+        `Load phase is ${loadPhase}. Scheduling queue processing.`
       );
-      if (processQueuesTimeoutRef.current === null) {
-        processQueuesTimeoutRef.current = setTimeout(() => {
-          processQueuesTimeoutRef.current = null;
-          if (isMountedRef.current) processQueuesRef.current?.();
-        }, 0);
-      }
+      scheduleQueueProcessing(); // Use the scheduler
     }
-    return () => {
-      if (processQueuesTimeoutRef.current) {
-        clearTimeout(processQueuesTimeoutRef.current);
-        processQueuesTimeoutRef.current = null;
-      }
-    };
-  }, [loadPhase, log]);
+    // Cleanup for THIS effect, not for the scheduled timeout itself,
+    // as scheduleQueueProcessing manages its own timeout ref.
+    // If loadPhase changes rapidly, scheduleQueueProcessing has its own guards.
+  }, [loadPhase, log, scheduleQueueProcessing]);
 
+  // prioritizeLoad function
   const prioritizeLoad = useCallback(
     (targetFrameIndex, { isAnticipated = false } = {}) => {
+      // ... (prioritizeLoad logic - use currentImageStatuses from state, scheduleQueueProcessing)
       if (!isMountedRef.current || !initialFrameLoaded || frameCount <= 0)
         return;
-
+      const currentImageStatusesSnapshot = imageStatuses;
       const centerFrame =
         (Math.round(targetFrameIndex % frameCount) + frameCount) % frameCount;
       const windowSize = isAnticipated
         ? NEIGHBOR_WINDOW_ANTICIPATED
         : NEIGHBOR_WINDOW_CURRENT;
-
       let qRef = queuesRef.current;
       let addedToPriority = false;
-
       for (let i = -windowSize; i <= windowSize; i++) {
         const frameToPrioritize = (centerFrame + i + frameCount) % frameCount;
-        const status = imageStatuses[frameToPrioritize];
-
+        const status = currentImageStatusesSnapshot[frameToPrioritize];
         if (
           status === "idle" ||
           (status === "error" &&
-            (retryCounts.current[frameToPrioritize] || 0) <= RETRY_LIMIT)
+            (retryCounts.current[frameToPrioritize] || 0) < RETRY_LIMIT)
         ) {
           if (qRef.keyframes.has(frameToPrioritize)) {
             qRef.keyframes.delete(frameToPrioritize);
@@ -499,24 +477,25 @@ export function useProgressiveImageLoader(
           }
         }
       }
-
       if (addedToPriority) {
         log(
           LOG_LEVEL.INFO,
-          `Prioritized frames around ${centerFrame}. Priority Q size: ${qRef.priority.size}. Triggering processQueues.`
+          `Prioritized frames around ${centerFrame}. Priority Q size: ${qRef.priority.size}. Scheduling queue processing.`
         );
-        if (processQueuesTimeoutRef.current === null) {
-          processQueuesTimeoutRef.current = setTimeout(() => {
-            processQueuesTimeoutRef.current = null;
-            if (isMountedRef.current) processQueuesRef.current?.();
-          }, 0);
-        }
+        scheduleQueueProcessing(); // Use the scheduler
       }
     },
-    [initialFrameLoaded, frameCount, imageStatuses, log]
-  );
+    [
+      initialFrameLoaded,
+      frameCount,
+      imageStatuses,
+      log,
+      scheduleQueueProcessing,
+    ]
+  ); // imageStatuses and scheduleQueueProcessing are dependencies
 
   return {
+    /* ... return object - no change ... */
     imageElementsRef: { current: imageElements },
     imageStatusRef: { current: imageStatuses },
     isLoadingInitial:

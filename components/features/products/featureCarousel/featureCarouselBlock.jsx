@@ -1,8 +1,8 @@
 // components/features/products/featureCarousel/featureCarouselBlock.jsx
 import React from "react";
 import PropTypes from "prop-types";
-import { cn } from "@/lib/utils";
-import FeatureCarouselClient from "./featureCarouselClient"; // Adjusted path
+import FeatureCarouselLoader from "./featureCarouselLoader";
+// Import the new client component loader instead of directly importing FeatureCarouselClient
 
 /**
  * @typedef {object} ImageAsset
@@ -32,7 +32,6 @@ import FeatureCarouselClient from "./featureCarouselClient"; // Adjusted path
  * @property {Array<PortableTextBlockChild>} children
  * @property {Array<object>} markDefs
  * @property {string} [style]
- * // For images within portable text
  * @property {SanityImage} [asset]
  * @property {string} [alt]
  * @property {string} [caption]
@@ -61,16 +60,19 @@ import FeatureCarouselClient from "./featureCarouselClient"; // Adjusted path
 
 /**
  * Server component wrapper for the Feature Carousel.
+ * It now renders the FeatureCarouselLoader (a client component) which handles dynamic import.
  * @param {{ block: FeatureCarouselBlockProps, productContext?: object }} props
  * @returns {JSX.Element | null}
  */
 export default function FeatureCarouselBlock({ block, productContext }) {
-  const { sectionTitle, sectionSubtitle, slides } = block;
+  const { sectionTitle, sectionSubtitle, slides } = block || {};
 
   if (!slides || slides.length === 0) {
     if (process.env.NODE_ENV === "development") {
       console.warn(
-        `FeatureCarouselBlock (key: ${block._key}): No slides provided. Skipping render.`
+        `FeatureCarouselBlock (key: ${
+          block?._key || "N/A"
+        }): No slides provided. Skipping render.`
       );
     }
     return null;
@@ -100,14 +102,10 @@ export default function FeatureCarouselBlock({ block, productContext }) {
           </div>
         )}
 
-        <FeatureCarouselClient
+        {/* Render the FeatureCarouselLoader client component */}
+        <FeatureCarouselLoader
           slides={slides}
           productContext={productContext}
-          // Pass your desired layout values from the prompt
-          cardWidth={480}
-          gap={20}
-          paddingStart={60}
-          paddingEnd={60}
         />
       </div>
     </section>
