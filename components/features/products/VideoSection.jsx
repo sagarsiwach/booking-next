@@ -4,252 +4,429 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
 import { Button } from "@/components/ui/button";
-import { PlayIcon, PauseIcon, Expand, Minimize } from "lucide-react"; // Using lucide for icons
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
-import { Close } from "@carbon/icons-react";
+import {
+  PlayIcon,
+  PauseIcon,
+  ExpandIcon,
+  Volume2Icon,
+  VolumeXIcon,
+  XIcon,
+} from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import Image from "next/image";
+import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion"; // <<<< IMPORT ADDED HERE
+
+/**
+ * @typedef {object} VideoBlockSanity
+ * @property {string} [_key]
+ * @property {string} [_type]
+ * @property {string} [sectionTitle]
+ * @property {string} [sectionSubtitle]
+ * @property {{asset?: {url: string, mimeType?: string}}} [videoFile]
+ * @property {string} [videoUrl]
+ * @property {{asset: {url: string, metadata?: {lqip?: string, dimensions?: {width: number, height: number}}}, alt: string}} posterImage
+ * @property {string} [caption]
+ * @property {boolean} [autoplay]
+ * @property {boolean} [loop]
+ * @property {boolean} [showControls]
+ */
 
 export default function VideoSection({ block }) {
   const {
-    title: sectionTitle,
-    description: sectionSubtitle,
+    sectionTitle,
+    sectionSubtitle,
     videoFile,
+    videoUrl: externalVideoUrl,
     posterImage,
-    youtubeLink,
-    aspectRatio = "16/9",
+    caption,
+    autoplay: initialAutoplay = false,
+    loop = false,
+    showControls: showNativeControls = true,
   } = block || {};
 
   const videoRef = useRef(null);
+  const playerContainerRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isHovering, setIsHovering] = useState(false);
-  const [showControls, setShowControls] = useState(false); // Controls only visible on hover initially
-  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(initialAutoplay);
+  const [isHoveringPlayer, setIsHoveringPlayer] = useState(false);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [showCustomControls, setShowCustomControls] = useState(false);
 
-  const youtubeVideoId = youtubeLink
-    ? new URLSearchParams(new URL(youtubeLink).search).get("v")
-    : null;
-  const youtubeEmbedUrl = youtubeVideoId
-    ? `https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&rel=0&modestbranding=1&showinfo=0`
-    : null;
+  const finalVideoUrl = externalVideoUrl || videoFile?.asset?.url;
+
+  const isYouTube =
+    finalVideoUrl &&
+    (finalVideoUrl.includes("youtube.com/watch") ||
+      finalVideoUrl.includes("youtu.be/"));
+
+  let youtubeEmbedUrl = null;
+  if (isYouTube) {
+    try {
+      const url = new URL(finalVideoUrl);
+      const videoId =
+        url.hostname === "youtu.be"
+          ? url.pathname.substring(1)
+          : url.searchParams.get("v");
+      if (videoId) {
+        youtubeEmbedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&showinfo=0&controls=1`;
+      }
+    } catch (e) {
+      console.error("Error parsing YouTube URL:", e);
+    }
+  }
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     if (video.paused || video.ended) {
-      video.play().catch((e) => console.error("Video play error:", e));
-      setIsPlaying(true);
+      video
+        .play()
+        .catch((error) => console.error("Error playing video:", error));
     } else {
       video.pause();
-      setIsPlaying(false);
     }
   }, []);
 
-  const openYouTubeOverlay = useCallback(() => {
-    if (youtubeEmbedUrl) {
-      videoRef.current?.pause();
-      setIsPlaying(false);
-      setIsOverlayOpen(true);
-    } else {
-      console.warn("No valid YouTube link provided for overlay.");
-      // Optionally toggle local video play if no YouTube link
-      togglePlay();
-    }
-  }, [youtubeEmbedUrl, togglePlay]);
-
-  // Auto-play/pause on hover (muted only)
-  useEffect(() => {
+  const toggleMute = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !isHovering) {
-      if (video && isPlaying && !video.paused) {
-        // Pause if leaving hover while playing
-        video.pause();
-        setIsPlaying(false);
-      }
-      setShowControls(false); // Hide controls on leave
-      return;
+    if (!video) return;
+    video.muted = !video.muted;
+  }, []);
+
+  const openLightbox = useCallback(() => {
+    if (videoRef.current && isPlaying) {
+      videoRef.current.pause();
     }
+    setIsLightboxOpen(true);
+  }, [isPlaying]);
 
-    setShowControls(true); // Show controls on hover
+  const closeLightbox = useCallback(() => {
+    setIsLightboxOpen(false);
+  }, []);
 
-    // Only attempt hover-play if video exists and is muted
-    if (video.muted) {
-      video.play().catch((e) => console.error("Hover play error:", e));
-      setIsPlaying(true);
-    }
-  }, [isHovering]); // Only depends on hover state
-
-  // Update playing state based on video events
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => setIsPlaying(false);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      if (!loop && video) video.currentTime = 0;
+    };
+    const handleVolumeChange = () => {
+      if (video) setIsMuted(video.muted);
+    };
 
     video.addEventListener("play", handlePlay);
     video.addEventListener("pause", handlePause);
     video.addEventListener("ended", handleEnded);
+    video.addEventListener("volumechange", handleVolumeChange);
+
+    if (initialAutoplay && video.muted) {
+      video
+        .play()
+        .catch((error) => console.error("Error attempting autoplay:", error));
+    }
+
     return () => {
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
       video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("volumechange", handleVolumeChange);
     };
-  }, []);
+  }, [initialAutoplay, loop]);
 
-  if (!videoFile?.asset?.url && !youtubeLink) {
-    console.warn("VideoSection: Missing videoFile URL and youtubeLink.");
-    return null; // Don't render if no video source
+  useEffect(() => {
+    const isInlinePlayableVideo = finalVideoUrl && !isYouTube;
+    if (!showNativeControls && isInlinePlayableVideo) {
+      setShowCustomControls(isHoveringPlayer || isPlaying);
+    } else {
+      setShowCustomControls(false);
+    }
+  }, [
+    isHoveringPlayer,
+    isPlaying,
+    showNativeControls,
+    isYouTube,
+    finalVideoUrl,
+  ]);
+
+  if (!finalVideoUrl) {
+    if (process.env.NODE_ENV === "development")
+      console.warn("VideoSection: Missing video source.");
+    return null;
+  }
+  if (!posterImage?.asset?.url) {
+    if (process.env.NODE_ENV === "development")
+      console.warn("VideoSection: Missing poster image.");
+    return null;
   }
 
-  const hasLocalVideo = !!videoFile?.asset?.url;
+  const isInlinePlayable = finalVideoUrl && !isYouTube;
+  const dialogTitle = sectionTitle || posterImage.alt || "Video Player";
+  const dialogDescription =
+    sectionSubtitle || caption || `Playing video: ${dialogTitle}`;
 
   return (
-    <section className="py-16 md:py-24 bg-black text-white">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        {(sectionTitle || sectionSubtitle) && (
-          <div className="text-center mb-12 max-w-2xl mx-auto">
-            {sectionTitle && (
-              <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-2 text-white">
-                {sectionTitle}
-              </h2>
-            )}
-            {sectionSubtitle && (
-              <p className="text-lg md:text-xl text-gray-300">
-                {sectionSubtitle}
-              </p>
-            )}
-          </div>
+    <section
+      ref={playerContainerRef}
+      className="h-screen relative flex flex-col justify-center items-start bg-black text-white overflow-hidden"
+      onMouseEnter={() => setIsHoveringPlayer(true)}
+      onMouseLeave={() => setIsHoveringPlayer(false)}
+      aria-label={sectionTitle || "Featured Video"}
+    >
+      <div className="absolute inset-0 z-0" aria-hidden="true">
+        {isInlinePlayable ? (
+          <video
+            ref={videoRef}
+            src={finalVideoUrl}
+            poster={posterImage.asset.url}
+            className="w-full h-full object-cover"
+            playsInline
+            loop={loop}
+            muted={isMuted}
+            controls={showNativeControls}
+            aria-label={sectionTitle || posterImage.alt || "Product video"}
+          />
+        ) : (
+          <Image
+            src={posterImage.asset.url}
+            alt={posterImage.alt || sectionTitle || "Video background"}
+            fill
+            className="object-cover"
+            priority
+            placeholder={posterImage.asset.metadata?.lqip ? "blur" : "empty"}
+            blurDataURL={posterImage.asset.metadata?.lqip}
+            quality={85}
+          />
         )}
-
-        <Dialog open={isOverlayOpen} onOpenChange={setIsOverlayOpen}>
-          <div
-            className="aspect-video max-w-4xl mx-auto relative rounded-lg overflow-hidden shadow-xl bg-black group"
-            style={{ aspectRatio: aspectRatio.replace("/", " / ") }}
-            onMouseEnter={() => setIsHovering(true)}
-            onMouseLeave={() => setIsHovering(false)}
-            onClick={!hasLocalVideo ? openYouTubeOverlay : undefined} // Click main area only if no local video
-          >
-            {hasLocalVideo && (
-              <video
-                ref={videoRef}
-                src={videoFile.asset.url}
-                poster={posterImage?.asset?.url}
-                className="absolute inset-0 w-full h-full object-cover"
-                playsInline
-                muted // Always muted for hover play
-                loop
-                preload="metadata"
-                aria-label={sectionTitle || "Product video"}
-              />
-            )}
-            {/* Render Poster Image if local video exists or as fallback */}
-            {!hasLocalVideo && posterImage?.asset?.url && (
-              <Image
-                src={posterImage.asset.url}
-                alt={posterImage.alt || sectionTitle || "Video Poster"}
-                fill
-                className="object-cover"
-                priority // Load poster quickly
-              />
-            )}
-
-            {/* Play/Pause/Expand Controls */}
-            <div
-              className={cn(
-                "absolute inset-0 flex items-center justify-center transition-opacity duration-300",
-                "bg-black/30", // Slightly darker overlay always visible
-                hasLocalVideo && !isPlaying && "opacity-100", // Show play icon when paused
-                hasLocalVideo && isPlaying && !showControls && "opacity-0", // Hide pause when playing & not hovered
-                hasLocalVideo && isPlaying && showControls && "opacity-100", // Show pause when playing & hovered
-                !hasLocalVideo && "opacity-100 cursor-pointer" // Always show play for YouTube link
-              )}
-            >
-              <Button
-                variant="secondary"
-                size="icon"
-                className="w-16 h-16 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"
-                onClick={hasLocalVideo ? togglePlay : openYouTubeOverlay}
-                aria-label={isPlaying ? "Pause video" : "Play video"}
-              >
-                {hasLocalVideo ? (
-                  isPlaying ? (
-                    <PauseIcon className="w-8 h-8" />
-                  ) : (
-                    <PlayIcon className="w-8 h-8 fill-current" />
-                  )
-                ) : (
-                  <PlayIcon className="w-8 h-8 fill-current" /> // Always show play for YouTube
-                )}
-              </Button>
-            </div>
-
-            {/* Expand button specifically for YouTube links */}
-            {youtubeEmbedUrl && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "absolute bottom-3 right-3 rounded-full w-9 h-9 z-20 transition-opacity duration-200 bg-black/40 hover:bg-black/60 text-white",
-                  showControls ? "opacity-100" : "opacity-0" // Show on hover
-                )}
-                onClick={openYouTubeOverlay}
-                aria-label="Watch on YouTube"
-                title="Watch on YouTube"
-              >
-                <Expand size={18} />
-              </Button>
-            )}
-          </div>
-
-          {/* YouTube Overlay Content */}
-          {youtubeEmbedUrl && (
-            <DialogContent
-              className="max-w-[90vw] max-h-[90vh] w-auto h-auto p-0 bg-black border-none flex aspect-video" // Aspect ratio for video
-              onInteractOutside={(e) => e.preventDefault()} // Keep open on outside click
-            >
-              <iframe
-                src={youtubeEmbedUrl}
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className="w-full h-full"
-              ></iframe>
-              <DialogClose
-                asChild
-                className="absolute -top-2 -right-2 md:top-2 md:right-2 rounded-full opacity-80 hover:opacity-100 z-50"
-              >
-                <Button variant="secondary" size="icon" className="w-8 h-8">
-                  <Close size={20} />
-                  <span className="sr-only">Close</span>
-                </Button>
-              </DialogClose>
-            </DialogContent>
-          )}
-        </Dialog>
       </div>
+
+      <div
+        className="absolute inset-0 z-[5] bg-gradient-to-r from-black/70 via-black/50 to-transparent pointer-events-none"
+        aria-hidden="true"
+      />
+
+      <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 w-full">
+        <div className="pl-0 md:pl-16">
+          {(sectionTitle || sectionSubtitle) && (
+            <div className="text-left max-w-xl md:max-w-2xl">
+              {sectionTitle && (
+                <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white mb-3 sm:mb-4">
+                  {sectionTitle}
+                </h2>
+              )}
+              {sectionSubtitle && (
+                <p className="text-lg sm:text-xl md:text-2xl text-neutral-300">
+                  {sectionSubtitle}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(!isPlaying || isYouTube) && (
+        <div
+          className={cn(
+            "absolute inset-0 z-10 flex items-center justify-center transition-opacity duration-300",
+            isHoveringPlayer || !isPlaying || isYouTube
+              ? "opacity-100"
+              : "opacity-0"
+          )}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm"
+            onClick={isInlinePlayable ? togglePlay : openLightbox}
+            aria-label={
+              isPlaying && isInlinePlayable ? "Pause video" : "Play video"
+            }
+          >
+            {isPlaying && isInlinePlayable ? (
+              <PauseIcon size={48} />
+            ) : (
+              <PlayIcon size={48} className="fill-current" />
+            )}
+          </Button>
+        </div>
+      )}
+
+      {isInlinePlayable && !showNativeControls && showCustomControls && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:bottom-8 md:left-16 z-20 flex items-center gap-3 p-2 bg-black/50 backdrop-blur-sm rounded-lg shadow-lg">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={togglePlay}
+            className="text-white hover:bg-white/20 w-10 h-10"
+            aria-label={isPlaying ? "Pause" : "Play"}
+            aria-pressed={isPlaying}
+          >
+            {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMute}
+              className="text-white hover:bg-white/20 w-10 h-10"
+              aria-label={isMuted ? "Unmute" : "Mute"}
+              aria-pressed={!isMuted}
+            >
+              {isMuted ? <VolumeXIcon size={22} /> : <Volume2Icon size={22} />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={openLightbox}
+              className="text-white hover:bg-white/20 w-10 h-10"
+              aria-label="Open fullscreen player"
+            >
+              <ExpandIcon size={20} />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {caption && !isLightboxOpen && (
+        <p className="absolute bottom-6 left-1/2 -translate-x-1/2 md:left-auto md:right-16 md:translate-x-0 text-xs text-center md:text-right text-neutral-400 italic max-w-xs md:max-w-sm z-20 pointer-events-none">
+          {caption}
+        </p>
+      )}
+
+      <DialogPrimitive.Root
+        open={isLightboxOpen}
+        onOpenChange={setIsLightboxOpen}
+      >
+        <DialogPrimitive.Portal forceMount>
+          <AnimatePresence>
+            {isLightboxOpen && (
+              <>
+                <DialogPrimitive.Overlay asChild forceMount>
+                  <motion.div
+                    className="fixed inset-0 z-[199] bg-black/90 backdrop-blur-sm"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </DialogPrimitive.Overlay>
+                <DialogPrimitive.Content
+                  asChild
+                  forceMount
+                  onEscapeKeyDown={closeLightbox}
+                >
+                  <motion.div
+                    className={cn(
+                      "fixed left-1/2 top-1/2 z-[200] grid place-items-center overflow-hidden p-0 border-none",
+                      "-translate-x-1/2 -translate-y-1/2",
+                      "w-[calc(100vw-80px)] h-[calc(100vh-80px)]",
+                      "max-w-none max-h-none rounded-xl shadow-2xl bg-black"
+                    )}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2, delay: 0.05 }}
+                  >
+                    <VisuallyHidden asChild>
+                      <DialogPrimitive.Title>
+                        {dialogTitle}
+                      </DialogPrimitive.Title>
+                    </VisuallyHidden>
+                    {dialogDescription && (
+                      <VisuallyHidden asChild>
+                        <DialogPrimitive.Description>
+                          {dialogDescription}
+                        </DialogPrimitive.Description>
+                      </VisuallyHidden>
+                    )}
+
+                    <div className="relative w-full h-full">
+                      {youtubeEmbedUrl ? (
+                        <iframe
+                          src={youtubeEmbedUrl}
+                          title={
+                            sectionTitle || posterImage.alt || "Video Player"
+                          }
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          className="w-full h-full"
+                        />
+                      ) : (
+                        finalVideoUrl && (
+                          <video
+                            src={finalVideoUrl}
+                            className="w-full h-full object-contain"
+                            controls
+                            autoPlay
+                            loop={loop}
+                            muted={false} // Typically unmuted in lightbox
+                            aria-label={
+                              sectionTitle ||
+                              posterImage.alt ||
+                              "Lightbox video"
+                            }
+                          />
+                        )
+                      )}
+                    </div>
+                    <DialogPrimitive.Close asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "absolute rounded-full bg-black/50 hover:bg-black/70 text-white z-20",
+                          "top-8 right-8",
+                          "w-10 h-10 sm:w-11 sm:h-11"
+                        )}
+                        aria-label="Close video player"
+                      >
+                        <XIcon size={24} />
+                      </Button>
+                    </DialogPrimitive.Close>
+                  </motion.div>
+                </DialogPrimitive.Content>
+              </>
+            )}
+          </AnimatePresence>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </section>
   );
 }
 
-// --- PropTypes ---
-const AssetPropTypes = PropTypes.shape({
-  url: PropTypes.string,
-  // Add other asset fields if needed (mimeType, size etc.)
-});
-
 VideoSection.propTypes = {
   block: PropTypes.shape({
-    title: PropTypes.string,
-    description: PropTypes.string,
-    videoFile: PropTypes.shape({ asset: AssetPropTypes }),
-    posterImage: PropTypes.shape({
-      asset: AssetPropTypes,
-      alt: PropTypes.string,
+    sectionTitle: PropTypes.string,
+    sectionSubtitle: PropTypes.string,
+    videoFile: PropTypes.shape({
+      asset: PropTypes.shape({
+        url: PropTypes.string,
+        mimeType: PropTypes.string,
+      }),
     }),
-    youtubeLink: PropTypes.string,
-    aspectRatio: PropTypes.string,
-    _key: PropTypes.string.isRequired,
-    _type: PropTypes.string.isRequired,
+    videoUrl: PropTypes.string,
+    posterImage: PropTypes.shape({
+      asset: PropTypes.shape({
+        url: PropTypes.string.isRequired,
+        metadata: PropTypes.shape({
+          lqip: PropTypes.string,
+          dimensions: PropTypes.shape({
+            width: PropTypes.number,
+            height: PropTypes.number,
+          }),
+        }),
+      }).isRequired,
+      alt: PropTypes.string.isRequired,
+    }).isRequired,
+    caption: PropTypes.string,
+    autoplay: PropTypes.bool,
+    loop: PropTypes.bool,
+    showControls: PropTypes.bool,
   }).isRequired,
 };

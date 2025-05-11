@@ -23,9 +23,8 @@ let useControlsHook = (name, schema, options) => {
   if (schema) {
     for (const key in schema) {
       if (key === "GSAP" || key === "Popmotion") {
-        defaults[key] = {}; // Initialize as object
+        defaults[key] = {};
         if (schema[key] && typeof schema[key] === "object") {
-          // Check if schema[key] is an object
           for (const subKey in schema[key]) {
             if (
               typeof schema[key][subKey] === "object" &&
@@ -70,7 +69,7 @@ let useControlsHook = (name, schema, options) => {
 
   return defaults;
 };
-let folderHook = (schema, options) => schema; // For production, folder doesn't modify the schema
+let folderHook = (schema, options) => schema;
 
 if (process.env.NODE_ENV === "development") {
   try {
@@ -100,7 +99,6 @@ const DEBUG_COMPONENT = process.env.NODE_ENV === "development";
 const PHYSICS_PRESETS_GSAP = {
   default: { dragSensitivity: 1.8, flickBoost: 2.5, inertiaResistance: 180 },
 };
-// Using const for production defaults
 const POPMOTION_DEFAULTS_PROD = {
   dragFactor: 15,
   flickBoost: 1,
@@ -108,8 +106,14 @@ const POPMOTION_DEFAULTS_PROD = {
   decayTimeConstant: 500,
   decayRestDelta: 0.4,
 };
-const FRAMES_TO_USE = 360;
 
+/**
+ * ConfiguratorSection component displays a 360-degree turntable view of a vehicle.
+ * @param {object} props - Component props.
+ * @param {object} props.block - Configuration data for this block.
+ * @param {object} [props.productContext] - Contextual product information.
+ * @returns {JSX.Element | null} The rendered component or null.
+ */
 export default function ConfiguratorSection({ block, productContext }) {
   const {
     modelCode,
@@ -122,7 +126,8 @@ export default function ConfiguratorSection({ block, productContext }) {
     initialFrameOverride = block?.initialFrameOverride ?? 0,
   } = block || {};
 
-  const frameCount = FRAMES_TO_USE || block?.frameCount || 72;
+  const frameCount =
+    block?.configuratorSetup?.frameCount || block?.frameCount || 72;
 
   const levaSchema = {
     showLevaControls: {
@@ -134,7 +139,7 @@ export default function ConfiguratorSection({ block, productContext }) {
       value: "POPMOTION",
       options: ["POPMOTION", "GSAP"],
       label: "Animation Library",
-      render: (get) => get("Turntable Physics.showLevaControls") === true, // Ensure boolean check
+      render: (get) => get("Turntable Physics.showLevaControls") === true,
     },
     GSAP: folderHook(
       {
@@ -215,8 +220,8 @@ export default function ConfiguratorSection({ block, productContext }) {
   };
 
   const levaPanelOptions = {
-    collapsed: process.env.NODE_ENV === "production", // Fully collapse in prod
-    render: (get) => get("Turntable Physics.showLevaControls") === true, // Ensure render is boolean
+    collapsed: process.env.NODE_ENV === "production",
+    render: (get) => get("Turntable Physics.showLevaControls") === true,
   };
 
   const controls = useControlsHook(
@@ -225,7 +230,6 @@ export default function ConfiguratorSection({ block, productContext }) {
     levaPanelOptions
   );
 
-  // Use values from levaControls if in dev and shown, otherwise use production defaults
   const animationLibrary =
     process.env.NODE_ENV === "development" && controls.showLevaControls
       ? controls.animationLibrary
@@ -269,32 +273,51 @@ export default function ConfiguratorSection({ block, productContext }) {
     process.env.NODE_ENV === "development" ? controls.showLevaControls : false;
 
   const log = useCallback((...args) => {
-    if (DEBUG_COMPONENT) console.log("[ConfiguratorComp]", ...args);
+    if (DEBUG_COMPONENT) console.log("[ConfiguratorSection]", ...args);
   }, []);
+
   const generateImageUrls = useCallback(
-    (count, size, currentModelCode, colorSlug) => {
-      if (!currentModelCode || !colorSlug || !size || !count || count <= 0)
+    (currentFrameCount, size, currentModelCode, colorSlug) => {
+      if (
+        !currentModelCode ||
+        !colorSlug ||
+        !size ||
+        !currentFrameCount ||
+        currentFrameCount <= 0
+      )
         return [];
       const urls = [];
       const baseUrl = `https://images.kabiramobility.com/processed_images/${currentModelCode}/${colorSlug}/${size}/`;
       const prefix = `${currentModelCode}_${colorSlug}_`;
       const suffix = `_${size}.avif`;
-      for (let i = 1; i <= count; i++) {
+      for (let i = 1; i <= currentFrameCount; i++) {
         urls.push(`${baseUrl}${prefix}${String(i).padStart(3, "0")}${suffix}`);
       }
       return urls;
     },
     []
   );
-  const getSlugString = useCallback((colorObj) => {
-    if (!colorObj) return undefined;
-    if (typeof colorObj.slug === "string") return colorObj.slug;
-    return colorObj.slug?.current;
-  }, []);
+
+  const getSlugString = useCallback(
+    (colorObj) => {
+      if (!colorObj) return undefined;
+      // Handle both direct string slug (from old schema) and object slug (from Sanity default)
+      if (typeof colorObj.slug === "string") return colorObj.slug;
+      if (typeof colorObj.slug?.current === "string")
+        return colorObj.slug.current;
+      // Fallback if `colors` array in block uses direct name as slug (legacy from block data)
+      if (block?.configuratorSetup?.colorSlugs?.includes(colorObj.name))
+        return colorObj.name;
+      return undefined;
+    },
+    [block?.configuratorSetup?.colorSlugs]
+  );
+
   const defaultColor = useMemo(
     () => colorsFromBlock.find((c) => c.isDefault) || colorsFromBlock[0],
     [colorsFromBlock]
   );
+
   const initialColorSlug = useMemo(() => {
     if (defaultColor) {
       const slugStr = getSlugString(defaultColor);
@@ -304,8 +327,21 @@ export default function ConfiguratorSection({ block, productContext }) {
       const slugStr = getSlugString(colorsFromBlock[0]);
       if (slugStr) return slugStr;
     }
+    // Fallback to first slug from configuratorSetup if available
+    if (
+      block?.configuratorSetup?.colorSlugs &&
+      block.configuratorSetup.colorSlugs.length > 0
+    ) {
+      return block.configuratorSetup.colorSlugs[0];
+    }
     return undefined;
-  }, [colorsFromBlock, defaultColor, getSlugString]);
+  }, [
+    colorsFromBlock,
+    defaultColor,
+    getSlugString,
+    block?.configuratorSetup?.colorSlugs,
+  ]);
+
   const safeInitialFrame = useMemo(
     () => (initialFrameOverride + frameCount) % frameCount,
     [initialFrameOverride, frameCount]
@@ -316,6 +352,7 @@ export default function ConfiguratorSection({ block, productContext }) {
   const is2xl = useMediaQuery("(min-width: 1536px)");
   const isXl = useMediaQuery("(min-width: 1280px)");
   const isMd = useMediaQuery("(min-width: 768px)");
+
   const currentSizeLabel = useMemo(() => {
     if (is2xl) return "lg";
     if (isXl) return "md";
@@ -367,7 +404,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     imageElementsRef,
     imageStatusRef,
     isLoadingInitial,
-    isLoadingKeyframes,
+    isLoadingStructuredPasses,
     isFullyLoaded,
     loadedAndVisibleKeyframes,
     loadingProgress,
@@ -375,7 +412,8 @@ export default function ConfiguratorSection({ block, productContext }) {
     prioritizeLoad,
     loadPhase,
   } = useProgressiveImageLoader(imageUrls, frameCount, safeInitialFrame);
-  const initialFrameActuallyLoaded = !isLoadingInitial;
+
+  const turntableShouldBeEnabled = !isLoadingInitial;
 
   useEffect(() => {
     const currentPhysics =
@@ -401,7 +439,7 @@ export default function ConfiguratorSection({ block, productContext }) {
       ...currentPhysics,
     });
     log(
-      `Image Loader: isLoadingInitial=${isLoadingInitial}, initialFrameActuallyLoaded=${initialFrameActuallyLoaded}, isLoadingKeyframes=${isLoadingKeyframes}, loadPhase=${loadPhase}, progress=${loadingProgress}%`
+      `Image Loader State: isLoadingInitial=${isLoadingInitial}, isLoadingStructuredPasses=${isLoadingStructuredPasses}, isFullyLoaded=${isFullyLoaded}, loadPhase=${loadPhase}, progress=${loadingProgress}%, loadedKeyframesCount=${loadedAndVisibleKeyframes.size}`
     );
   }, [
     modelCode,
@@ -419,29 +457,33 @@ export default function ConfiguratorSection({ block, productContext }) {
     decayRestDelta,
     log,
     isLoadingInitial,
-    initialFrameActuallyLoaded,
-    isLoadingKeyframes,
+    isLoadingStructuredPasses,
+    isFullyLoaded,
     loadPhase,
     loadingProgress,
+    loadedAndVisibleKeyframes,
   ]);
 
   const commonTurntableOptions = useMemo(
     () => ({
       initialFrame: safeInitialFrame,
-      enabled: initialFrameActuallyLoaded,
+      enabled: turntableShouldBeEnabled,
       onFrameChange: (targetPreciseFrame, isCurrentlyAnimating) => {
         setIsAnimating(isCurrentlyAnimating);
         let frameToDisplay =
           (Math.round(targetPreciseFrame % frameCount) + frameCount) %
           frameCount;
+
         if (
           !isCurrentlyAnimating &&
-          (loadPhase === "keyframes" || loadPhase === "interactive") &&
-          loadedAndVisibleKeyframes?.size > 0 &&
-          !isFullyLoaded
+          !isFullyLoaded &&
+          loadPhase !== "initial_frame_loading" &&
+          loadPhase !== "error" &&
+          loadedAndVisibleKeyframes?.size > 0
         ) {
           let nearestKf = -1;
           let minDist = Infinity;
+
           loadedAndVisibleKeyframes.forEach((kfIndex) => {
             const diff = Math.abs(frameToDisplay - kfIndex);
             const dist = Math.min(diff, frameCount - diff);
@@ -450,8 +492,16 @@ export default function ConfiguratorSection({ block, productContext }) {
               nearestKf = kfIndex;
             }
           });
-          if (nearestKf !== -1) frameToDisplay = nearestKf;
+
+          if (nearestKf !== -1 && nearestKf !== frameToDisplay) {
+            // Only snap if different
+            log(
+              `Snapping: Display ${frameToDisplay} -> Nearest loaded ${nearestKf}`
+            );
+            frameToDisplay = nearestKf;
+          }
         }
+
         setVisualFrame(frameToDisplay);
         prioritizeLoad(
           isCurrentlyAnimating ? targetPreciseFrame : frameToDisplay,
@@ -469,12 +519,13 @@ export default function ConfiguratorSection({ block, productContext }) {
     }),
     [
       safeInitialFrame,
-      initialFrameActuallyLoaded,
+      turntableShouldBeEnabled,
       frameCount,
+      isFullyLoaded,
       loadPhase,
       loadedAndVisibleKeyframes,
-      isFullyLoaded,
       prioritizeLoad,
+      log,
     ]
   );
 
@@ -537,7 +588,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     canvasSize,
     devicePixelRatio,
     imageFit,
-    initialFrameActuallyLoaded,
+    turntableShouldBeEnabled,
     safeInitialFrame
   );
 
@@ -553,6 +604,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     const timeoutId = setTimeout(checkContainerWidth, 300);
     return () => clearTimeout(timeoutId);
   }, [log]);
+
   useEffect(() => {
     if (!showDragHintElement || isLoadingInitial) return;
     const updateMousePosition = (event) =>
@@ -560,10 +612,14 @@ export default function ConfiguratorSection({ block, productContext }) {
     window.addEventListener("mousemove", updateMousePosition);
     return () => window.removeEventListener("mousemove", updateMousePosition);
   }, [showDragHintElement, isLoadingInitial]);
+
   useEffect(() => {
-    setDevicePixelRatio(window.devicePixelRatio || 1);
+    if (typeof window !== "undefined") {
+      setDevicePixelRatio(window.devicePixelRatio || 1);
+    }
     const cont = containerRef.current;
     if (!cont) return;
+
     const observer = new ResizeObserver((entries) => {
       for (let entry of entries) {
         const { width, height } = entry.contentRect;
@@ -572,30 +628,37 @@ export default function ConfiguratorSection({ block, productContext }) {
     });
     setCanvasSize({ width: cont.clientWidth, height: cont.clientHeight });
     observer.observe(cont);
-    const dprUpdateHandler = () =>
-      setDevicePixelRatio(window.devicePixelRatio || 1);
-    const dprMediaQuery = window.matchMedia(
-      `(resolution: ${window.devicePixelRatio}dppx)`
-    );
-    try {
-      dprMediaQuery.addEventListener("change", dprUpdateHandler);
-    } catch (e) {
-      dprMediaQuery.addListener(dprUpdateHandler);
-    }
-    return () => {
-      if (cont) observer.unobserve(cont);
-      observer.disconnect();
-      try {
-        dprMediaQuery.removeEventListener("change", dprUpdateHandler);
-      } catch (e) {
-        dprMediaQuery.removeListener(dprUpdateHandler);
+
+    const dprUpdateHandler = () => {
+      if (typeof window !== "undefined") {
+        setDevicePixelRatio(window.devicePixelRatio || 1);
       }
     };
+    if (typeof window !== "undefined") {
+      const dprMediaQuery = window.matchMedia(
+        `(resolution: ${window.devicePixelRatio}dppx)`
+      );
+      try {
+        dprMediaQuery.addEventListener("change", dprUpdateHandler);
+      } catch (e) {
+        dprMediaQuery.addListener(dprUpdateHandler);
+      }
+      return () => {
+        if (cont) observer.unobserve(cont);
+        observer.disconnect();
+        try {
+          dprMediaQuery.removeEventListener("change", dprUpdateHandler);
+        } catch (e) {
+          dprMediaQuery.removeListener(dprUpdateHandler);
+        }
+      };
+    }
   }, []);
+
   useEffect(() => {
     if (initialColorSlug && initialColorSlug !== currentColorSlug) {
       setCurrentColorSlug(initialColorSlug);
-      if (setTurntableFrame) setTurntableFrame(safeInitialFrame, true);
+      if (setTurntableFrame) setTurntableFrame(safeInitialFrame);
     }
   }, [initialColorSlug, currentColorSlug, safeInitialFrame, setTurntableFrame]);
 
@@ -603,7 +666,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     (newColorSlug) => {
       if (newColorSlug === currentColorSlug || isLoadingInitial) return;
       setShowDragHintElement(true);
-      if (setTurntableFrame) setTurntableFrame(safeInitialFrame, true);
+      if (setTurntableFrame) setTurntableFrame(safeInitialFrame);
       setCurrentColorSlug(newColorSlug);
     },
     [currentColorSlug, isLoadingInitial, safeInitialFrame, setTurntableFrame]
@@ -611,6 +674,7 @@ export default function ConfiguratorSection({ block, productContext }) {
 
   const finalSectionTitle = blockSectionTitle || "Vehicle Overview";
   const finalSectionSubtitle = blockSectionSubtitle || "Drag to Explore";
+
   const dragHintOpacity = useMemo(() => {
     if (!showDragHintElement || isLoadingInitial || isMouseOverColorSelector)
       return 0;
@@ -621,6 +685,7 @@ export default function ConfiguratorSection({ block, productContext }) {
     isMouseOverTurntableArea,
     isMouseOverColorSelector,
   ]);
+
   const mainContainerCursor = useMemo(() => {
     if (isLoadingInitial) return "wait";
     if (dragHintOpacity > 0) return "none";
@@ -630,11 +695,13 @@ export default function ConfiguratorSection({ block, productContext }) {
 
   const renderColorSelector = () => {
     if (!colorsFromBlock || colorsFromBlock.length === 0) return null;
+
     const currentSelectedColorObj = colorsFromBlock.find(
       (c) => getSlugString(c) === currentColorSlug
     );
     const currentSelectedColorName =
       currentSelectedColorObj?.name || currentColorSlug;
+
     return (
       <div
         ref={colorSelectorContainerRef}
@@ -642,12 +709,10 @@ export default function ConfiguratorSection({ block, productContext }) {
         onMouseLeave={() => setIsMouseOverColorSelector(false)}
         className={cn(
           "absolute z-50 flex items-center gap-2.5",
-          "bottom-6 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:bottom-10 md:left-8 lg:left-16 xl:left-[64px] 2xl:left-[160px]"
+          "bottom-6 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:bottom-10 md:left-8 lg:left-16 xl:left-[64px] 2xl:left-[64px]" // Max 2xl left offset 64px
         )}
       >
-        {" "}
         <div className="p-1.5 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm rounded-lg shadow-xl flex items-center gap-2">
-          {" "}
           {colorsFromBlock.map((color) => {
             const slugValue = getSlugString(color);
             if (!slugValue) return null;
@@ -666,13 +731,11 @@ export default function ConfiguratorSection({ block, productContext }) {
                     : "ring-1 ring-neutral-400 dark:ring-neutral-600 hover:ring-primary dark:hover:ring-primary hover:scale-105",
                   "disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center"
                 )}
-                style={{ backgroundColor: color.colorValue || "#CCC" }}
+                style={{ backgroundColor: color.colorValue?.hex || "#CCC" }}
                 aria-label={`Select color ${color.name || slugValue}`}
                 aria-pressed={isSelected}
               >
-                {" "}
                 <AnimatePresence>
-                  {" "}
                   {isSelected && (
                     <motion.div
                       initial={{ scale: 0, opacity: 0 }}
@@ -681,27 +744,24 @@ export default function ConfiguratorSection({ block, productContext }) {
                       transition={{ duration: 0.15 }}
                       className="absolute inset-0 flex items-center justify-center"
                     >
-                      {" "}
                       <Checkmark
                         size={isTabletScreen ? 20 : 18}
                         className="text-white filter drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]"
-                      />{" "}
+                      />
                     </motion.div>
-                  )}{" "}
-                </AnimatePresence>{" "}
+                  )}
+                </AnimatePresence>
               </button>
             );
-          })}{" "}
-        </div>{" "}
+          })}
+        </div>
         {isLgScreen && currentSelectedColorName && (
           <div className="p-2.5 md:p-3 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm rounded-lg shadow-xl flex justify-start items-center overflow-hidden">
-            {" "}
             <div className="text-neutral-700 dark:text-neutral-200 text-lg md:text-xl font-medium tracking-tight">
-              {" "}
-              {currentSelectedColorName}{" "}
-            </div>{" "}
+              {currentSelectedColorName}
+            </div>
           </div>
-        )}{" "}
+        )}
       </div>
     );
   };
@@ -710,38 +770,34 @@ export default function ConfiguratorSection({ block, productContext }) {
     return (
       <section
         className={cn(
-          "relative w-full min-h-dvh h-dvh flex items-center justify-center p-4",
+          "relative w-full min-h-[90vh] h-[90vh] flex items-center justify-center p-4",
           backgroundColor,
           className
         )}
       >
-        {" "}
         <div className="text-center">
-          {" "}
           <h2 className="text-xl font-semibold text-destructive mb-2">
-            {" "}
-            Configurator Unavailable{" "}
-          </h2>{" "}
+            Configurator Unavailable
+          </h2>
           <p className="text-muted-foreground">
-            {" "}
-            Essential configuration data is missing.{" "}
-          </p>{" "}
+            Essential configuration data is missing.
+          </p>
           {!modelCode && (
             <p className="text-xs text-destructive-foreground">
               Missing: Model Code
             </p>
-          )}{" "}
+          )}
           {!initialColorSlug && (
             <p className="text-xs text-destructive-foreground">
               Missing: Initial Color
             </p>
-          )}{" "}
+          )}
           {frameCount <= 0 && (
             <p className="text-xs text-destructive-foreground">
               Invalid: Frame Count
             </p>
-          )}{" "}
-        </div>{" "}
+          )}
+        </div>
       </section>
     );
   }
@@ -751,7 +807,7 @@ export default function ConfiguratorSection({ block, productContext }) {
 
   return (
     <>
-      {showLevaControls && ( // Conditionally render LevaComponent based on the Leva control itself
+      {showLevaControls && (
         <LevaComponent
           titleBar={{ title: "Page Dev Controls", filter: false, drag: true }}
           collapsed={true}
@@ -761,11 +817,10 @@ export default function ConfiguratorSection({ block, productContext }) {
       <section
         className={cn(
           "relative w-full overflow-hidden font-sans",
-          "h-[calc(100dvh-var(--navigation-height,81px))] md:h-dvh",
+          "h-[90vh]",
           backgroundColor,
           className
         )}
-        style={{ "--navigation-height": "81px" }}
       >
         <div
           ref={containerRef}
@@ -814,15 +869,15 @@ export default function ConfiguratorSection({ block, productContext }) {
           </motion.div>
         )}
 
-        <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-b from-white via-white/0 to-white dark:from-neutral-950 dark:via-neutral-950/0 dark:to-neutral-950 opacity-50" />
+        <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-b from-white/20 via-transparent to-white/20 dark:from-neutral-950/20 dark:via-transparent dark:to-neutral-950/20 opacity-50" />
 
         <div
           className={cn(
             "absolute z-30 pointer-events-none",
             "px-4 top-[40px] w-full text-center md:text-left",
             "md:top-[80px] md:px-8 lg:px-16",
-            "xl:left-[64px] xl:w-auto xl:max-w-[640px]",
-            "2xl:left-[160px]"
+            "xl:left-[64px] xl:w-auto xl:max-w-[640px]" // UPDATED: Simplified to use xl:left-[64px]
+            // Removed 2xl:left-[160px] to keep it consistent with xl
           )}
         >
           <h2
@@ -881,7 +936,7 @@ export default function ConfiguratorSection({ block, productContext }) {
             </motion.div>
           )}
         </AnimatePresence>
-        {!isLoadingInitial && isLoadingKeyframes && !isFullyLoaded && (
+        {!isLoadingInitial && isLoadingStructuredPasses && !isFullyLoaded && (
           <div className="absolute top-4 right-4 z-50 p-2 bg-black/50 dark:bg-neutral-800/70 text-white dark:text-neutral-300 text-xs rounded-md shadow-lg flex items-center gap-1.5 pointer-events-none">
             <Information size={16} />
             <span>Optimizing view...</span>
@@ -913,7 +968,7 @@ ConfiguratorSection.propTypes = {
           PropTypes.string,
           PropTypes.shape({ current: PropTypes.string }),
         ]),
-        colorValue: PropTypes.string,
+        colorValue: PropTypes.shape({ hex: PropTypes.string }),
         isDefault: PropTypes.bool,
       })
     ),
@@ -922,12 +977,11 @@ ConfiguratorSection.propTypes = {
     className: PropTypes.string,
     backgroundColor: PropTypes.string,
     imageFit: PropTypes.oneOf(["contain", "cover"]),
-    // These are now effectively ignored if not in dev with Leva enabled,
-    // as the component uses hardcoded production defaults otherwise.
-    dragSensitivity: PropTypes.number,
-    flickBoost: PropTypes.number,
-    inertiaResistance: PropTypes.number,
     initialFrameOverride: PropTypes.number,
+    configuratorSetup: PropTypes.shape({
+      frameCount: PropTypes.number,
+      colorSlugs: PropTypes.arrayOf(PropTypes.string),
+    }),
   }).isRequired,
   productContext: PropTypes.shape({
     id: PropTypes.string,

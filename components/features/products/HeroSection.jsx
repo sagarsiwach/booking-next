@@ -31,7 +31,6 @@ const resolveSanityLinkUrl = (linkObject) => {
     ) {
       return linkObject;
     }
-    // console.warn(`Plain string "${linkObject}" passed to resolveSanityLinkUrl without clear type. Assuming invalid.`);
     return "#";
   }
 
@@ -55,7 +54,6 @@ const resolveSanityLinkUrl = (linkObject) => {
         ? linkObject.path
         : "#";
     default:
-      // console.warn(`Unknown link type "${linkObject.linkType}" in resolveSanityLinkUrl`);
       return "#";
   }
 };
@@ -111,9 +109,19 @@ const resolveSanityLinkUrl = (linkObject) => {
 /**
  * Hero section component for product pages.
  * @param {{ block?: HeroSectionBlockProps, productContext?: ProductContext }} props
- * @returns {JSX.Element}
+ * @returns {JSX.Element | null}
  */
 export default function HeroSection({ block, productContext }) {
+  if (!block) {
+    // Handle case where block data might be missing
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "HeroSection: block data is missing. Rendering empty or placeholder."
+      );
+    }
+    return null; // Or render a placeholder
+  }
+
   const {
     title: blockTitle,
     subtitle,
@@ -125,7 +133,7 @@ export default function HeroSection({ block, productContext }) {
     secondaryButtonLink,
     optionalButtonLabel,
     optionalButtonLink,
-  } = block || {};
+  } = block;
 
   const heroTitle = blockTitle || productContext?.title || "Product Title";
 
@@ -184,8 +192,7 @@ export default function HeroSection({ block, productContext }) {
 
   return (
     <section
-      className="relative flex items-end bg-black text-white overflow-hidden"
-      style={{ height: "calc(100dvh - 81px)" }}
+      className="relative flex items-end bg-black text-white overflow-hidden h-[90vh]" // UPDATED height
     >
       {image?.asset?.url && (
         <Image
